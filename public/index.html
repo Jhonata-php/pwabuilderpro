@@ -274,12 +274,13 @@
     let buildStartTime = 0;
     let loaderTimerInterval = null;
     let loaderMessageInterval = null;
+    let buildTimeout = null;
     const loaderMessages = [
         "Construindo seu App...",
         "Aguarde mais um pouco...",
-        "Estamos finalizando...",
-        "Empacotando recursos...",
-        "Otimizando imagens..."
+        "Isso pode levar alguns minutos...",
+        "Preparando o ambiente...",
+        "Compilando o pacote..."
     ];
 
     // Load History
@@ -402,6 +403,7 @@
 
         clearInterval(loaderTimerInterval);
         clearInterval(loaderMessageInterval);
+        clearTimeout(buildTimeout);
         fullLoader.classList.remove('show');
 
         if(data.success || data.hasLogs) {
@@ -469,6 +471,42 @@
         document.getElementById('loaderTimer').innerText = "00:00";
         clearInterval(loaderTimerInterval);
         clearInterval(loaderMessageInterval);
+        clearTimeout(buildTimeout);
+
+        buildTimeout = setTimeout(() => {
+            clearInterval(loaderTimerInterval);
+            clearInterval(loaderMessageInterval);
+            fullLoader.classList.remove('show');
+
+            btnGerar.disabled = false;
+            buildSpinner.style.display = 'none';
+            btnGerar.querySelector('span').innerText = 'GERAR ARQUIVO .AAB';
+
+            statusInd.innerText = "❌ ERRO: Tempo Limite Excedido (12 min)";
+            statusInd.style.background = '#e74c3c';
+            statusInd.style.color = 'white';
+
+            const modalTitle = document.getElementById('modalTitle');
+            const checkIcon = document.getElementById('modalCheckIcon');
+            const circleIcon = document.getElementById('modalCircleIcon');
+            const iconLine1 = document.getElementById('iconLine1');
+            const iconLine2 = document.getElementById('iconLine2');
+
+            modalTitle.innerText = "Falha por Tempo Limite (Timeout)";
+            modalTitle.style.color = "#e74c3c";
+            checkIcon.className = "check-icon error-icon";
+            circleIcon.className = "icon-circle error-circle";
+            iconLine1.className = "icon-line error-line left";
+            iconLine2.className = "icon-line error-line right";
+
+            btnDownloadApk.innerText = "Fechar";
+            btnDownloadApk.style.background = "#e74c3c";
+            btnDownloadApk.onclick = () => successModal.classList.remove('show');
+            document.getElementById('buildTimeText').style.display = 'none';
+            document.getElementById('signedBadge').style.display = 'none';
+
+            successModal.classList.add('show');
+        }, 12 * 60 * 1000);
 
         loaderTimerInterval = setInterval(() => {
             const elapsedMs = Date.now() - buildStartTime;
