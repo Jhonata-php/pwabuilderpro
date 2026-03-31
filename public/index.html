@@ -63,10 +63,10 @@
         #toast.error { background-color: #e74c3c; }
 
         /* Full Loader Overlay */
-        .full-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(30, 41, 59, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; visibility: hidden; opacity: 0; transition: opacity 0.3s, visibility 0.3s; }
-        .full-loader.show { visibility: visible; opacity: 1; }
-        .full-loader .spinner { border: 5px solid rgba(45, 212, 191, 0.2); border-top: 5px solid var(--green-main); width: 60px; height: 60px; display: block; margin-bottom: 20px;}
-        .full-loader p { color: var(--off-white); font-size: 1.2rem; font-weight: bold; }
+        .bottom-loader { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(30, 41, 59, 0.95); z-index: 2000; padding: 15px; border-top: 2px solid var(--green-main); display: flex; align-items: center; justify-content: center; gap: 20px; transition: opacity 0.3s, visibility 0.3s; visibility: hidden; opacity: 0; }
+        .bottom-loader.show { visibility: visible; opacity: 1; }
+        .bottom-loader .spinner { border: 5px solid rgba(45, 212, 191, 0.2); border-top: 5px solid var(--green-main); width: 30px; height: 30px; display: block; margin-bottom: 0;}
+        .bottom-loader p { color: var(--off-white); font-size: 1.2rem; font-weight: bold; margin: 0; }
 
         /* Modal Styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s, visibility 0.3s; }
@@ -105,9 +105,10 @@
 <div id="toast">Notificação</div>
 
 <!-- Full Screen Loader -->
-<div id="fullLoader" class="full-loader">
+<div id="fullLoader" class="bottom-loader">
     <div class="spinner"></div>
-    <p>Construindo seu App...</p>
+    <p id="loaderMessage">Construindo seu App...</p>
+    <div id="loaderTimer" style="font-size: 1.2rem; font-weight: bold; color: var(--mint); margin-left: 20px;">00:00</div>
 </div>
 
 <!-- Hamburger Menu Button -->
@@ -271,6 +272,15 @@
     const fullLoader = document.getElementById('fullLoader');
 
     let buildStartTime = 0;
+    let loaderTimerInterval = null;
+    let loaderMessageInterval = null;
+    const loaderMessages = [
+        "Construindo seu App...",
+        "Aguarde mais um pouco...",
+        "Estamos finalizando...",
+        "Empacotando recursos...",
+        "Otimizando imagens..."
+    ];
 
     // Load History
     function loadHistory() {
@@ -389,6 +399,9 @@
         btnGerar.disabled = false;
         buildSpinner.style.display = 'none';
         btnGerar.querySelector('span').innerText = 'GERAR ARQUIVO .AAB';
+
+        clearInterval(loaderTimerInterval);
+        clearInterval(loaderMessageInterval);
         fullLoader.classList.remove('show');
 
         if(data.success || data.hasLogs) {
@@ -450,6 +463,28 @@
         btnGerar.disabled = true;
         buildSpinner.style.display = 'block';
         btnGerar.querySelector('span').innerText = 'Construindo...';
+
+        // Reset loader content and show
+        document.getElementById('loaderMessage').innerText = loaderMessages[0];
+        document.getElementById('loaderTimer').innerText = "00:00";
+        clearInterval(loaderTimerInterval);
+        clearInterval(loaderMessageInterval);
+
+        loaderTimerInterval = setInterval(() => {
+            const elapsedMs = Date.now() - buildStartTime;
+            const minutes = Math.floor(elapsedMs / 60000);
+            const seconds = Math.floor((elapsedMs % 60000) / 1000);
+            const m = minutes.toString().padStart(2, '0');
+            const s = seconds.toString().padStart(2, '0');
+            document.getElementById('loaderTimer').innerText = `${m}:${s}`;
+        }, 1000);
+
+        let msgIndex = 0;
+        loaderMessageInterval = setInterval(() => {
+            msgIndex = (msgIndex + 1) % loaderMessages.length;
+            document.getElementById('loaderMessage').innerText = loaderMessages[msgIndex];
+        }, 4000);
+
         fullLoader.classList.add('show');
 
         const formData = new FormData(e.target);
