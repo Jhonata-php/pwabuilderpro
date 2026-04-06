@@ -51,8 +51,9 @@
         .history-item-info { display: flex; flex-direction: column; gap: 4px; }
         .history-item-name { font-weight: bold; color: var(--off-white); font-size: 0.95rem; }
         .history-item-date { font-size: 0.8rem; color: #cbd5e1; }
-        .history-item-download { background: var(--mint); color: #121212; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 1.1rem; transition: background 0.3s; text-decoration: none; }
+        .history-item-download { background: var(--mint); color: #121212; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 0.85rem; font-weight: bold; transition: background 0.3s; text-decoration: none; }
         .history-item-download:hover { background: #23a897; }
+        .history-buttons { display: flex; gap: 8px; }
 
         .spinner { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid #fff; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -305,7 +306,10 @@
                     <span class="history-item-name">${item.appName}</span>
                     <span class="history-item-date">${item.date}</span>
                 </div>
-                <a href="/download" class="history-item-download" title="Baixar último build">⬇</a>
+                <div class="history-buttons">
+                    <a href="/download?type=apk" class="history-item-download" style="background: #2ecc71;" title="Baixar último APK">APK</a>
+                    <a href="/download?type=aab" class="history-item-download" title="Baixar último AAB">AAB</a>
+                </div>
             `;
             historyList.appendChild(li);
         });
