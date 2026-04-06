@@ -107,6 +107,7 @@ app.get('/fetch-manifest', async (req, res) => {
 // ROTA DE DOWNLOAD INTELIGENTE
 app.get('/download', (req, res) => {
     const buildDir = path.join(__dirname, 'temp_build');
+    const type = req.query.type; // 'aab' ou 'apk'
     
     // Lista de caminhos onde o arquivo pode estar escondido
     const caminhosParaChecar = [
@@ -118,12 +119,19 @@ app.get('/download', (req, res) => {
     ];
 
     let arquivoCaminho = null;
-    let nomeOriginal = "app-final.aab";
+    let nomeOriginal = type === 'apk' ? "app-final.apk" : "app-final.aab";
 
     for (const pasta of caminhosParaChecar) {
         if (fs.existsSync(pasta)) {
             const arquivos = fs.readdirSync(pasta);
-            const encontrado = arquivos.find(f => (f.endsWith('.aab') || f.endsWith('.apk')) && f !== 'build.log');
+            let encontrado;
+            if (type === 'apk') {
+                encontrado = arquivos.find(f => f.endsWith('.apk'));
+            } else if (type === 'aab') {
+                encontrado = arquivos.find(f => f.endsWith('.aab'));
+            } else {
+                encontrado = arquivos.find(f => (f.endsWith('.aab') || f.endsWith('.apk')) && f !== 'build.log');
+            }
             if (encontrado) {
                 arquivoCaminho = path.join(pasta, encontrado);
                 nomeOriginal = encontrado;
