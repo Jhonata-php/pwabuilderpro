@@ -38,8 +38,8 @@
         .header-icon { display: flex; align-items: center; gap: 10px; }
 
         /* Hamburger Menu & History Sidebar */
-        .menu-btn { position: fixed; top: 4px; right: 20px; background: none; border: none; font-size: 28px; cursor: pointer; color: var(--mint); padding: 5px; z-index: 1000; transition: color 0.3s; width: auto; min-height: auto; }
-        .menu-btn:hover { color: var(--green-main); background: none; }
+        .menu-btn { position: fixed; top: 4px; right: 20px; background: none; border: none; font-size: 28px; cursor: pointer; color: var(--off-white); padding: 5px; z-index: 1000; transition: color 0.3s; width: auto; min-height: auto; }
+        .menu-btn:hover { color: #cbd5e1; background: none; }
         .history-sidebar { position: fixed; top: 0; right: -350px; width: 300px; height: 100%; background: var(--blue-bg); border-left: 1px solid var(--blue-mid); box-shadow: -2px 0 10px rgba(0,0,0,0.5); z-index: 1001; transition: right 0.3s ease-in-out; padding: 20px; display: flex; flex-direction: column; color: var(--off-white); }
         .history-sidebar.open { right: 0; }
         .history-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--blue-mid); padding-bottom: 15px; margin-bottom: 15px; }
@@ -51,8 +51,9 @@
         .history-item-info { display: flex; flex-direction: column; gap: 4px; }
         .history-item-name { font-weight: bold; color: var(--off-white); font-size: 0.95rem; }
         .history-item-date { font-size: 0.8rem; color: #cbd5e1; }
-        .history-item-download { background: var(--mint); color: #121212; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 1.1rem; transition: background 0.3s; text-decoration: none; }
+        .history-item-download { background: var(--mint); color: #121212; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 0.85rem; font-weight: bold; transition: background 0.3s; text-decoration: none; }
         .history-item-download:hover { background: #23a897; }
+        .history-buttons { display: flex; gap: 8px; }
 
         .spinner { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid #fff; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -86,7 +87,7 @@
         .check-icon.error-icon { border-color: #e74c3c; }
         .check-icon::before { top: 3px; left: -2px; width: 30px; transform-origin: 100% 50%; border-radius: 100px 0 0 100px; }
         .check-icon::after { top: 0; left: 30px; width: 60px; transform-origin: 0 50%; border-radius: 0 100px 100px 0; animation: rotatePlaceholder 4.25s ease-in; }
-        .check-icon::before, .check-icon::after { content: ''; height: 100px; position: absolute; background: #FFFFFF; transform: rotate(-45deg); }
+        .check-icon::before, .check-icon::after { content: ''; height: 100px; position: absolute; background: var(--blue-mid); transform: rotate(-45deg); }
         .icon-line { height: 5px; background-color: #4CAF50; display: block; border-radius: 2px; position: absolute; z-index: 10; }
         .icon-line.error-line { background-color: #e74c3c; top: 37px; width: 47px; transform-origin: center; animation: none; }
         .icon-line.error-line.left { left: 17px; transform: rotate(45deg); }
@@ -95,7 +96,7 @@
         .icon-line.line-long { top: 38px; right: 8px; width: 47px; transform: rotate(-45deg); animation: icon-line-long 0.75s; }
         .icon-circle { top: -4px; left: -4px; z-index: 10; width: 80px; height: 80px; border-radius: 50%; position: absolute; box-sizing: content-box; border: 4px solid rgba(76, 175, 80, 0.5); }
         .icon-circle.error-circle { border-color: rgba(231, 76, 60, 0.5); }
-        .icon-fix { top: 8px; width: 5px; left: 26px; z-index: 1; height: 85px; position: absolute; transform: rotate(-45deg); background-color: #FFFFFF; }
+        .icon-fix { top: 8px; width: 5px; left: 26px; z-index: 1; height: 85px; position: absolute; transform: rotate(-45deg); background-color: var(--blue-mid); }
         @keyframes icon-line-tip { 0% { width: 0; left: 1px; top: 19px; } 54% { width: 0; left: 1px; top: 19px; } 70% { width: 50px; left: -8px; top: 37px; } 84% { width: 17px; left: 21px; top: 48px; } 100% { width: 25px; left: 14px; top: 46px; } }
         @keyframes icon-line-long { 0% { width: 0; right: 46px; top: 54px; } 65% { width: 0; right: 46px; top: 54px; } 84% { width: 55px; right: 0px; top: 35px; } 100% { width: 47px; right: 8px; top: 38px; } }
     </style>
@@ -129,7 +130,8 @@
         <p id="buildTimeText">Gerado em --</p>
         <p id="signedBadge" style="display: none; color: #2ecc71; font-weight: bold; margin-bottom: 15px; background: #e8f8f5; padding: 10px; border-radius: 8px;">✅ Verificado: Aplicativo Assinado Digitalmente</p>
         <div class="modal-buttons">
-            <button class="btn-primary" id="btnDownloadApk">Baixar APK/AAB</button>
+            <button class="btn-primary" id="btnDownloadAab">Baixar AAB</button>
+            <button class="btn-primary" id="btnDownloadApk" style="background: #2ecc71; color: #121212;">Baixar APK</button>
             <button class="btn-secondary" id="btnCloseModal">Fechar</button>
         </div>
     </div>
@@ -157,7 +159,7 @@
             <legend>🌐 Web Scraping</legend>
             <div class="form-group">
                 <label>URL (Site do PWA):</label>
-                <input type="text" id="hostInput" name="host" placeholder="ex: meudominio.com" value="casinhas.ceramicamagazine.com.br" required>
+                <input type="text" id="hostInput" name="host" placeholder="ex: meudominio.com" required>
                 <button type="button" id="btnFetch" class="btn-fetch">
                     <div class="spinner" id="fetchSpinner"></div>
                     <span>Buscar Dados Automáticos</span>
@@ -165,7 +167,7 @@
             </div>
             <div class="form-group">
                 <label>URL de Start (Scope):</label>
-                <input type="text" id="startUrl" name="startUrl" value="/">
+                <input type="text" id="startUrl" name="startUrl" placeholder="ex: /" value="/">
             </div>
         </fieldset>
 
@@ -173,17 +175,65 @@
             <legend>🆔 Identidade do App</legend>
             <div class="form-group">
                 <label>Nome do App:</label>
-                <input type="text" id="appName" name="appName" value="Casinhas Cerâmica" required>
+                <input type="text" id="appName" name="appName" placeholder="ex: Meu Super App" required>
             </div>
             <div class="form-group">
                 <label>Nome Curto (Short Name):</label>
-                <input type="text" id="shortName" name="shortName" value="Casinhas">
+                <input type="text" id="shortName" name="shortName" placeholder="ex: Meu App">
             </div>
             <div class="form-group">
                 <label>Package ID:</label>
-                <input type="text" id="packageId" name="packageId" placeholder="ex: br.com.dominio.app" value="">
+                <input type="text" id="packageId" name="packageId" placeholder="ex: br.com.dominio.app">
             </div>
             <input type="hidden" id="iconUrl" name="iconUrl" value="">
+        </fieldset>
+
+        <fieldset>
+            <legend>📄 Detalhes e Exibição</legend>
+            <div class="form-group">
+                <label>Description:</label>
+                <textarea id="description" name="description" placeholder="Descrição do aplicativo" style="width: 100%; padding: 10px; border: 1px solid var(--blue-mid); border-radius: 8px; box-sizing: border-box; font-size: 1rem; background: var(--blue-mid); color: var(--off-white); font-family: 'Segoe UI', sans-serif; resize: vertical; min-height: 80px;"></textarea>
+            </div>
+            <div class="form-group">
+                <label>IARC Rating ID:</label>
+                <input type="text" id="iarc" name="iarc" placeholder="O iarc Manifest se aplicar">
+            </div>
+            <div class="row">
+                <div class="form-group">
+                    <label>Display:</label>
+                    <select id="displayMode" name="displayMode" style="width: 100%; padding: 10px; border: 1px solid var(--blue-mid); border-radius: 8px; font-size: 1rem; background: var(--blue-mid); color: var(--off-white);">
+                        <option value="standalone">Standalone (Aplicativo, sem interface do navegador, apenas interface do sistema)</option>
+                        <option value="fullscreen">Fullscreen (Nenhum navegador ou interface do usuário mostrada)</option>
+                        <option value="minimal-ui">Minimal UI</option>
+                        <option value="browser">Browser</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Orientation:</label>
+                    <select id="orientation" name="orientation" style="width: 100%; padding: 10px; border: 1px solid var(--blue-mid); border-radius: 8px; font-size: 1rem; background: var(--blue-mid); color: var(--off-white);">
+                        <option value="any">Any</option>
+                        <option value="natural">Natural</option>
+                        <option value="landscape">Landscape</option>
+                        <option value="landscape-primary">Landscape (Primary)</option>
+                        <option value="landscape-secondary">Landscape (Secondary)</option>
+                        <option value="portrait">Portrait</option>
+                        <option value="portrait-primary">Portrait (Primary)</option>
+                        <option value="portrait-secondary">Portrait (Secondary)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; justify-content: space-between; align-items: center;">
+                    Screenshots (URLs):
+                    <button type="button" id="btnAddScreenshot" style="background: var(--blue-bg); color: var(--mint); border: 1px solid var(--mint); padding: 5px 10px; width: auto; min-height: 30px; font-size: 0.9em; margin-top: 0; display: inline-block; cursor: pointer;">+ Adicionar</button>
+                </label>
+                <div id="screenshotsContainer">
+                    <div class="screenshot-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" name="screenshots" placeholder="https://exemplo.com/screenshot1.png" style="flex: 1; min-height: 40px;">
+                        <button type="button" class="btnRemoveScreenshot" style="background: #e74c3c; color: white; width: 40px; min-height: 40px; margin-top: 0; padding: 0;">✖</button>
+                    </div>
+                </div>
+            </div>
         </fieldset>
 
         <fieldset>
@@ -219,11 +269,11 @@
             <div class="row">
                 <div class="form-group">
                     <label>Version Name:</label>
-                    <input type="text" name="versionName" value="1.0.23" required>
+                    <input type="text" name="versionName" placeholder="ex: 1.0.0" required>
                 </div>
                 <div class="form-group">
                     <label>Version Code:</label>
-                    <input type="number" name="versionCode" value="23" required>
+                    <input type="number" name="versionCode" placeholder="ex: 1" required>
                 </div>
             </div>
             <div class="form-group">
@@ -232,11 +282,11 @@
             </div>
             <div class="form-group">
                 <label>Key Alias:</label>
-                <input type="text" name="keyAlias" value="casinhasceramicamagazine" required>
+                <input type="text" name="keyAlias" placeholder="ex: meualias" required>
             </div>
             <div class="form-group">
                 <label>Senha da Keystore:</label>
-                <input type="password" name="storePassword" required>
+                <input type="password" name="storePassword" placeholder="Sua senha da keystore" required>
             </div>
         </fieldset>
 
@@ -264,6 +314,7 @@
 
     // Modal Elements
     const successModal = document.getElementById('successModal');
+    const btnDownloadAab = document.getElementById('btnDownloadAab');
     const btnDownloadApk = document.getElementById('btnDownloadApk');
     const btnCloseModal = document.getElementById('btnCloseModal');
     const buildTimeText = document.getElementById('buildTimeText');
@@ -303,11 +354,37 @@
                     <span class="history-item-name">${item.appName}</span>
                     <span class="history-item-date">${item.date}</span>
                 </div>
-                <a href="/download" class="history-item-download" title="Baixar último build">⬇</a>
+                <div class="history-buttons">
+                    <a href="/download?type=apk" class="history-item-download" style="background: #2ecc71;" title="Baixar último APK">APK</a>
+                    <a href="/download?type=aab" class="history-item-download" title="Baixar último AAB">AAB</a>
+                </div>
             `;
             historyList.appendChild(li);
         });
     }
+
+    // Screenshots dynamic fields
+    const screenshotsContainer = document.getElementById('screenshotsContainer');
+    const btnAddScreenshot = document.getElementById('btnAddScreenshot');
+
+    btnAddScreenshot.onclick = () => {
+        const div = document.createElement('div');
+        div.className = 'screenshot-row';
+        div.style.display = 'flex';
+        div.style.gap = '8px';
+        div.style.marginBottom = '8px';
+        div.innerHTML = `
+            <input type="text" name="screenshots" placeholder="https://exemplo.com/screenshot.png" style="flex: 1; min-height: 40px;">
+            <button type="button" class="btnRemoveScreenshot" style="background: #e74c3c; color: white; width: 40px; min-height: 40px; margin-top: 0; padding: 0;">✖</button>
+        `;
+        screenshotsContainer.appendChild(div);
+    };
+
+    screenshotsContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('btnRemoveScreenshot')) {
+            e.target.parentElement.remove();
+        }
+    });
 
     // Save to History
     function saveToHistory(appName) {
@@ -320,8 +397,12 @@
     }
 
     // Modal and Sidebar Event Listeners
+    btnDownloadAab.onclick = () => {
+        window.location.href = '/download?type=aab';
+        successModal.classList.remove('show');
+    };
     btnDownloadApk.onclick = () => {
-        window.location.href = '/download';
+        window.location.href = '/download?type=apk';
         successModal.classList.remove('show');
     };
     btnCloseModal.onclick = () => {
@@ -366,6 +447,41 @@
                 document.getElementById('themeDarkColor').value = data.themeColor;
             }
             if (data.backgroundColor) document.getElementById('backgroundColor').value = data.backgroundColor;
+
+            if (data.description) document.getElementById('description').value = data.description;
+            if (data.iarc_rating_id) document.getElementById('iarc').value = data.iarc_rating_id;
+            if (data.display) {
+                const select = document.getElementById('displayMode');
+                for(let i=0; i<select.options.length; i++) {
+                    if(select.options[i].value === data.display) {
+                        select.selectedIndex = i; break;
+                    }
+                }
+            }
+            if (data.orientation) {
+                const select = document.getElementById('orientation');
+                for(let i=0; i<select.options.length; i++) {
+                    if(select.options[i].value === data.orientation) {
+                        select.selectedIndex = i; break;
+                    }
+                }
+            }
+
+            if (data.screenshots && data.screenshots.length > 0) {
+                screenshotsContainer.innerHTML = '';
+                data.screenshots.forEach(screenshotUrl => {
+                    const div = document.createElement('div');
+                    div.className = 'screenshot-row';
+                    div.style.display = 'flex';
+                    div.style.gap = '8px';
+                    div.style.marginBottom = '8px';
+                    div.innerHTML = `
+                        <input type="text" name="screenshots" value="${screenshotUrl}" style="flex: 1; min-height: 40px;">
+                        <button type="button" class="btnRemoveScreenshot" style="background: #e74c3c; color: white; width: 40px; min-height: 40px; margin-top: 0; padding: 0;">✖</button>
+                    `;
+                    screenshotsContainer.appendChild(div);
+                });
+            }
 
             // Generate a default package ID if one wasn't found but we have a URL
             let pkgId = data.packageId;
@@ -432,9 +548,19 @@
                 circleIcon.className = "icon-circle";
                 iconLine1.className = "icon-line line-tip";
                 iconLine2.className = "icon-line line-long";
-                btnDownloadApk.innerText = "Baixar APK/AAB";
-                btnDownloadApk.style.background = "var(--green-main)";
-                btnDownloadApk.style.color = "#121212";
+                btnDownloadAab.innerText = "Baixar AAB";
+                btnDownloadAab.style.background = "var(--green-main)";
+                btnDownloadAab.style.color = "#121212";
+                btnDownloadAab.onclick = () => {
+                    window.location.href = '/download?type=aab';
+                    successModal.classList.remove('show');
+                };
+                btnDownloadApk.style.display = 'block';
+                btnDownloadApk.innerText = "Baixar APK";
+                btnDownloadApk.onclick = () => {
+                    window.location.href = '/download?type=apk';
+                    successModal.classList.remove('show');
+                };
                 buildTimeText.style.display = 'block';
                 if (data.isSigned) {
                     signedBadge.style.display = 'block';
@@ -450,8 +576,13 @@
                 circleIcon.className = "icon-circle error-circle";
                 iconLine1.className = "icon-line error-line left";
                 iconLine2.className = "icon-line error-line right";
-                btnDownloadApk.innerText = "Baixar Logs de Erro";
-                btnDownloadApk.style.background = "#e74c3c";
+                btnDownloadAab.innerText = "Baixar Logs de Erro";
+                btnDownloadAab.style.background = "#e74c3c";
+                btnDownloadAab.onclick = () => {
+                    window.location.href = '/download';
+                    successModal.classList.remove('show');
+                };
+                btnDownloadApk.style.display = 'none';
                 buildTimeText.style.display = 'none';
                 signedBadge.style.display = 'none';
             }
@@ -504,9 +635,10 @@
             iconLine1.className = "icon-line error-line left";
             iconLine2.className = "icon-line error-line right";
 
-            btnDownloadApk.innerText = "Fechar";
-            btnDownloadApk.style.background = "#e74c3c";
-            btnDownloadApk.onclick = () => successModal.classList.remove('show');
+            btnDownloadAab.innerText = "Fechar";
+            btnDownloadAab.style.background = "#e74c3c";
+            btnDownloadAab.onclick = () => successModal.classList.remove('show');
+            btnDownloadApk.style.display = 'none';
             document.getElementById('buildTimeText').style.display = 'none';
             document.getElementById('signedBadge').style.display = 'none';
 
