@@ -214,7 +214,7 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
         }
 
         let finalShortName = shortName || appName.substring(0, 12);
-        let finalIconUrl = iconUrl || "https://casinhas.ceramicamagazine.com.br/appstore-images/ios/1024.png";
+        let finalIconUrl = iconUrl || "https://raw.githubusercontent.com/GoogleChromeLabs/bubblewrap/master/app/logo.png";
 
         // 2. Criar twa-manifest.json
         const twaManifest = {
