@@ -10,6 +10,8 @@ const cheerio = require('cheerio');
 
 const app = express();
 const server = http.createServer(app);
+
+let currentBuildProcesses = [];
 const io = new Server(server);
 const upload = multer({ dest: './uploads/', limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -20,6 +22,21 @@ app.use(express.json());
 function cleanLogs(text) {
     return text.toString().replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-z]/g, '');
 }
+
+app.post('/cancel-build', (req, res) => {
+    console.log(`> Cancelando ${currentBuildProcesses.length} processos de build...`);
+    currentBuildProcesses.forEach(proc => {
+        try {
+            proc.kill();
+        } catch (e) {
+            console.error("Erro ao matar processo:", e);
+        }
+    });
+    currentBuildProcesses = [];
+    io.emit('status', { success: false, msg: "❌ Build cancelado pelo usuário.", isSigned: false, hasLogs: true });
+    io.emit('log', `> ❌ BUILD CANCELADO PELO USUÁRIO.`);
+    res.json({ success: true, message: 'Build cancelled' });
+});
 
 // ROTA DE FETCH MANIFEST
 app.get('/fetch-manifest', async (req, res) => {
@@ -276,6 +293,7 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
                 };
 
                 const ls = spawn(cmd, args, { cwd: buildDir, env, shell: true });
+                currentBuildProcesses.push(ls);
 
                 ls.stdout.on('data', (data) => {
                     const clean = cleanLogs(data);
@@ -305,7 +323,13 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
                     fs.appendFileSync(path.join(buildDir, 'build.log'), `⚠️ ${clean}\n`);
                     io.emit('log', `⚠️ ${clean}`);
                 });
-                ls.on('close', (code) => resolve(code));
+                ls.on('close', (code) => {
+                    const index = currentBuildProcesses.indexOf(ls);
+                    if (index > -1) {
+                        currentBuildProcesses.splice(index, 1);
+                    }
+                    resolve(code);
+                });
             });
         };
 
