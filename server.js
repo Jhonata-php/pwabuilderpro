@@ -41,7 +41,8 @@ app.get('/fetch-manifest', async (req, res) => {
             themeColor: $('meta[name="theme-color"]').attr('content') || '#000000',
             backgroundColor: '#ffffff',
             iconUrl: '',
-            packageId: ''
+            packageId: '',
+            startUrl: '/'
         };
 
         const manifestLink = $('link[rel="manifest"]').attr('href');
@@ -56,6 +57,7 @@ app.get('/fetch-manifest', async (req, res) => {
                 if (manifest.short_name) manifestData.shortName = manifest.short_name;
                 if (manifest.theme_color) manifestData.themeColor = manifest.theme_color;
                 if (manifest.background_color) manifestData.backgroundColor = manifest.background_color;
+                if (manifest.start_url) manifestData.startUrl = manifest.start_url;
 
                 if (manifest.icons && manifest.icons.length > 0) {
                     // Try to find the largest icon or any icon
@@ -147,7 +149,7 @@ app.get('/download', (req, res) => {
 app.post('/generate', upload.single('signingKey'), async (req, res) => {
     const {
         appName, host, keyAlias, storePassword, versionCode, versionName,
-        shortName, packageId, themeColor, themeDarkColor, backgroundColor, navColor, navDarkColor, iconUrl
+        shortName, packageId, themeColor, themeDarkColor, backgroundColor, navColor, navDarkColor, iconUrl, startUrl
     } = req.body;
 
     if (!req.file || !host || !appName) {
@@ -204,7 +206,7 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
             navigationColorDark: navDarkColor || "#000000",
             backgroundColor: backgroundColor || "#ffffff",
             enableNotifications: true,
-            startUrl: "/",
+            startUrl: startUrl || "/",
             iconUrl: finalIconUrl,
             signingKey: { path: keystorePath, alias: keyAlias },
             appVersionCode: vCode,

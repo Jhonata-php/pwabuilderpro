@@ -163,6 +163,10 @@
                     <span>Buscar Dados Automáticos</span>
                 </button>
             </div>
+            <div class="form-group">
+                <label>URL de Start (Scope):</label>
+                <input type="text" id="startUrl" name="startUrl" value="/">
+            </div>
         </fieldset>
 
         <fieldset>
@@ -354,6 +358,7 @@
 
             const data = await res.json();
 
+            if (data.startUrl) document.getElementById('startUrl').value = data.startUrl;
             if (data.appName) document.getElementById('appName').value = data.appName;
             if (data.shortName) document.getElementById('shortName').value = data.shortName;
             if (data.themeColor) {
