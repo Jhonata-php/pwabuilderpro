@@ -189,6 +189,54 @@
         </fieldset>
 
         <fieldset>
+            <legend>📄 Detalhes e Exibição</legend>
+            <div class="form-group">
+                <label>Description:</label>
+                <textarea id="description" name="description" placeholder="Descrição do aplicativo" style="width: 100%; padding: 10px; border: 1px solid var(--blue-mid); border-radius: 8px; box-sizing: border-box; font-size: 1rem; background: var(--blue-mid); color: var(--off-white); font-family: 'Segoe UI', sans-serif; resize: vertical; min-height: 80px;"></textarea>
+            </div>
+            <div class="form-group">
+                <label>IARC Rating ID:</label>
+                <input type="text" id="iarc" name="iarc" placeholder="O iarc Manifest se aplicar">
+            </div>
+            <div class="row">
+                <div class="form-group">
+                    <label>Display:</label>
+                    <select id="displayMode" name="displayMode" style="width: 100%; padding: 10px; border: 1px solid var(--blue-mid); border-radius: 8px; font-size: 1rem; background: var(--blue-mid); color: var(--off-white);">
+                        <option value="standalone">Standalone (Aplicativo, sem interface do navegador, apenas interface do sistema)</option>
+                        <option value="fullscreen">Fullscreen (Nenhum navegador ou interface do usuário mostrada)</option>
+                        <option value="minimal-ui">Minimal UI</option>
+                        <option value="browser">Browser</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Orientation:</label>
+                    <select id="orientation" name="orientation" style="width: 100%; padding: 10px; border: 1px solid var(--blue-mid); border-radius: 8px; font-size: 1rem; background: var(--blue-mid); color: var(--off-white);">
+                        <option value="any">Any</option>
+                        <option value="natural">Natural</option>
+                        <option value="landscape">Landscape</option>
+                        <option value="landscape-primary">Landscape (Primary)</option>
+                        <option value="landscape-secondary">Landscape (Secondary)</option>
+                        <option value="portrait">Portrait</option>
+                        <option value="portrait-primary">Portrait (Primary)</option>
+                        <option value="portrait-secondary">Portrait (Secondary)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; justify-content: space-between; align-items: center;">
+                    Screenshots (URLs):
+                    <button type="button" id="btnAddScreenshot" style="background: var(--blue-bg); color: var(--mint); border: 1px solid var(--mint); padding: 5px 10px; width: auto; min-height: 30px; font-size: 0.9em; margin-top: 0; display: inline-block; cursor: pointer;">+ Adicionar</button>
+                </label>
+                <div id="screenshotsContainer">
+                    <div class="screenshot-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" name="screenshots[]" placeholder="https://exemplo.com/screenshot1.png" style="flex: 1; min-height: 40px;">
+                        <button type="button" class="btnRemoveScreenshot" style="background: #e74c3c; color: white; width: 40px; min-height: 40px; margin-top: 0; padding: 0;">✖</button>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
             <legend>🎨 Cores</legend>
             <div class="row">
                 <div class="form-group">
@@ -315,6 +363,29 @@
         });
     }
 
+    // Screenshots dynamic fields
+    const screenshotsContainer = document.getElementById('screenshotsContainer');
+    const btnAddScreenshot = document.getElementById('btnAddScreenshot');
+
+    btnAddScreenshot.onclick = () => {
+        const div = document.createElement('div');
+        div.className = 'screenshot-row';
+        div.style.display = 'flex';
+        div.style.gap = '8px';
+        div.style.marginBottom = '8px';
+        div.innerHTML = `
+            <input type="text" name="screenshots[]" placeholder="https://exemplo.com/screenshot.png" style="flex: 1; min-height: 40px;">
+            <button type="button" class="btnRemoveScreenshot" style="background: #e74c3c; color: white; width: 40px; min-height: 40px; margin-top: 0; padding: 0;">✖</button>
+        `;
+        screenshotsContainer.appendChild(div);
+    };
+
+    screenshotsContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('btnRemoveScreenshot')) {
+            e.target.parentElement.remove();
+        }
+    });
+
     // Save to History
     function saveToHistory(appName) {
         let history = JSON.parse(localStorage.getItem('pwaBuilderHistory')) || [];
@@ -376,6 +447,41 @@
                 document.getElementById('themeDarkColor').value = data.themeColor;
             }
             if (data.backgroundColor) document.getElementById('backgroundColor').value = data.backgroundColor;
+
+            if (data.description) document.getElementById('description').value = data.description;
+            if (data.iarc_rating_id) document.getElementById('iarc').value = data.iarc_rating_id;
+            if (data.display) {
+                const select = document.getElementById('displayMode');
+                for(let i=0; i<select.options.length; i++) {
+                    if(select.options[i].value === data.display) {
+                        select.selectedIndex = i; break;
+                    }
+                }
+            }
+            if (data.orientation) {
+                const select = document.getElementById('orientation');
+                for(let i=0; i<select.options.length; i++) {
+                    if(select.options[i].value === data.orientation) {
+                        select.selectedIndex = i; break;
+                    }
+                }
+            }
+
+            if (data.screenshots && data.screenshots.length > 0) {
+                screenshotsContainer.innerHTML = '';
+                data.screenshots.forEach(screenshotUrl => {
+                    const div = document.createElement('div');
+                    div.className = 'screenshot-row';
+                    div.style.display = 'flex';
+                    div.style.gap = '8px';
+                    div.style.marginBottom = '8px';
+                    div.innerHTML = `
+                        <input type="text" name="screenshots[]" value="${screenshotUrl}" style="flex: 1; min-height: 40px;">
+                        <button type="button" class="btnRemoveScreenshot" style="background: #e74c3c; color: white; width: 40px; min-height: 40px; margin-top: 0; padding: 0;">✖</button>
+                    `;
+                    screenshotsContainer.appendChild(div);
+                });
+            }
 
             // Generate a default package ID if one wasn't found but we have a URL
             let pkgId = data.packageId;

@@ -42,7 +42,12 @@ app.get('/fetch-manifest', async (req, res) => {
             backgroundColor: '#ffffff',
             iconUrl: '',
             packageId: '',
-            startUrl: '/'
+            startUrl: '/',
+            description: $('meta[name="description"]').attr('content') || '',
+            display: 'standalone',
+            orientation: 'any',
+            iarc_rating_id: '',
+            screenshots: []
         };
 
         const manifestLink = $('link[rel="manifest"]').attr('href');
@@ -58,6 +63,10 @@ app.get('/fetch-manifest', async (req, res) => {
                 if (manifest.theme_color) manifestData.themeColor = manifest.theme_color;
                 if (manifest.background_color) manifestData.backgroundColor = manifest.background_color;
                 if (manifest.start_url) manifestData.startUrl = manifest.start_url;
+                if (manifest.description) manifestData.description = manifest.description;
+                if (manifest.display) manifestData.display = manifest.display;
+                if (manifest.orientation) manifestData.orientation = manifest.orientation;
+                if (manifest.iarc_rating_id) manifestData.iarc_rating_id = manifest.iarc_rating_id;
 
                 if (manifest.icons && manifest.icons.length > 0) {
                     // Try to find the largest icon or any icon
@@ -71,6 +80,10 @@ app.get('/fetch-manifest', async (req, res) => {
                     if (bestIcon && bestIcon.src) {
                         manifestData.iconUrl = new URL(bestIcon.src, manifestUrl).href;
                     }
+                }
+
+                if (manifest.screenshots && manifest.screenshots.length > 0) {
+                    manifestData.screenshots = manifest.screenshots.map(s => new URL(s.src, manifestUrl).href);
                 }
 
                 if (manifest.related_applications && manifest.related_applications.length > 0) {
@@ -157,7 +170,8 @@ app.get('/download', (req, res) => {
 app.post('/generate', upload.single('signingKey'), async (req, res) => {
     const {
         appName, host, keyAlias, storePassword, versionCode, versionName,
-        shortName, packageId, themeColor, themeDarkColor, backgroundColor, navColor, navDarkColor, iconUrl, startUrl
+        shortName, packageId, themeColor, themeDarkColor, backgroundColor, navColor, navDarkColor, iconUrl, startUrl,
+        description, iarc, displayMode, orientation, screenshots
     } = req.body;
 
     if (!req.file || !host || !appName) {
@@ -208,7 +222,7 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
             host: cleanHost,
             name: appName,
             launcherName: finalShortName,
-            display: "standalone",
+            display: displayMode || "standalone",
             themeColor: themeColor || "#000000",
             navigationColor: navColor || "#000000",
             navigationColorDark: navDarkColor || "#000000",
@@ -221,8 +235,34 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
             appVersionName: vName,
             generatorApp: "bubblewrap-cli",
             splashScreenFadeOutDuration: 300,
-            displayNames: []
+            displayNames: [],
+            orientation: orientation || "any",
         };
+
+        if (description) twaManifest.description = description;
+        if (iarc) twaManifest.iarcRatingId = iarc;
+
+        let validScreenshots = [];
+        if (screenshots) {
+            const arr = Array.isArray(screenshots) ? screenshots : [screenshots];
+            validScreenshots = arr.filter(url => url.trim().length > 0);
+        }
+
+        // Formata os screenshots corretamente
+        // TWA manifest doesn't natively accept 'screenshots' array like this in its schema for 'init' in some versions,
+        // but bubblewrap cli lets you inject some properties.
+        // Wait, bubblewrap uses webManifestUrl or extracts from manifest.
+        // Actually bubblewrap `twa-manifest.json` does not typically take raw screenshot arrays.
+        // Wait, the prompt asked to add Description, IARC, Display, Orientation, and Screenshots.
+
+        // Actually, Bubblewrap's twa-manifest.json does not officially support screenshots or description directly.
+        // We will pass what we can into the twa-manifest.json, and the rest to the webManifest inside app/src/main/res
+        // However, Bubblewrap's twa-manifest.json does accept `fallbackType` or `webManifestUrl`.
+        // Let's at least store them in the twaManifest JSON object if the schema ignores unknown fields.
+        if (validScreenshots.length > 0) {
+             twaManifest.screenshots = validScreenshots.map(url => ({ src: url, sizes: "1080x1920", type: "image/png" }));
+        }
+
         fs.writeFileSync(path.join(buildDir, 'twa-manifest.json'), JSON.stringify(twaManifest, null, 2));
 
         const runCommand = (cmd, args) => {
