@@ -290,10 +290,13 @@
             </div>
         </fieldset>
 
-        <button type="submit" id="btnGerar">
-            <div class="spinner" id="buildSpinner"></div>
-            <span>GERAR ARQUIVO .AAB</span>
-        </button>
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" id="btnGerar" style="flex: 3;">
+                <div class="spinner" id="buildSpinner"></div>
+                <span>GERAR APLICATIVO</span>
+            </button>
+            <button type="button" id="btnCancel" style="flex: 1; display: none; background: #e74c3c;">Cancelar</button>
+        </div>
     </form>
 </div>
 
@@ -307,6 +310,7 @@
     const logDiv = document.getElementById('log');
     const statusInd = document.getElementById('statusInd');
     const btnGerar = document.getElementById('btnGerar');
+    const btnCancel = document.getElementById('btnCancel');
     const btnFetch = document.getElementById('btnFetch');
     const fetchSpinner = document.getElementById('fetchSpinner');
     const buildSpinner = document.getElementById('buildSpinner');
@@ -337,6 +341,69 @@
         "Preparando o ambiente...",
         "Compilando o pacote..."
     ];
+
+    function playSuccessSound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+            osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); // A6
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        } catch(e) { console.log('Audio not supported or blocked'); }
+    }
+
+    function loadSavedFormData() {
+        const buildForm = document.getElementById('buildForm');
+        if (!buildForm) return;
+
+        const savedDataStr = localStorage.getItem('pwaBuilderFormData');
+        if (savedDataStr) {
+            try {
+                const savedData = JSON.parse(savedDataStr);
+                for (const key in savedData) {
+                    const input = buildForm.elements[key];
+                    if (input) {
+                        if (input.type !== 'file' && input.type !== 'password' && input.name !== 'screenshots') {
+                            input.value = savedData[key];
+                        }
+                    }
+                }
+            } catch(e) { console.error("Error loading form data", e); }
+        }
+    }
+
+    function saveFormData() {
+        const buildForm = document.getElementById('buildForm');
+        if (!buildForm) return;
+
+        const formData = new FormData(buildForm);
+        const dataToSave = {};
+        for (let [key, value] of formData.entries()) {
+            const input = buildForm.elements[key];
+            if (input && input.type !== 'file' && input.type !== 'password' && key !== 'screenshots') {
+                dataToSave[key] = value;
+            }
+        }
+        localStorage.setItem('pwaBuilderFormData', JSON.stringify(dataToSave));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSavedFormData();
+        const buildForm = document.getElementById('buildForm');
+        if (buildForm) {
+            buildForm.addEventListener('input', saveFormData);
+            buildForm.addEventListener('change', saveFormData);
+        }
+    });
 
     // Load History
     function loadHistory() {
@@ -519,13 +586,16 @@
         statusInd.style.background = data.success ? 'var(--green-main)' : '#e74c3c';
         statusInd.style.color = data.success ? '#121212' : 'white';
         btnGerar.disabled = false;
+        btnCancel.style.display = 'none';
         buildSpinner.style.display = 'none';
-        btnGerar.querySelector('span').innerText = 'GERAR ARQUIVO .AAB';
+        btnGerar.querySelector('span').innerText = 'GERAR APLICATIVO';
 
         clearInterval(loaderTimerInterval);
         clearInterval(loaderMessageInterval);
         clearTimeout(buildTimeout);
         fullLoader.classList.remove('show');
+
+        playSuccessSound();
 
         if(data.success || data.hasLogs) {
             const elapsedMs = Date.now() - buildStartTime;
@@ -599,6 +669,7 @@
         statusInd.style.background = "#d35400";
 
         btnGerar.disabled = true;
+        btnCancel.style.display = 'block';
         buildSpinner.style.display = 'block';
         btnGerar.querySelector('span').innerText = 'Construindo...';
 
@@ -615,8 +686,9 @@
             fullLoader.classList.remove('show');
 
             btnGerar.disabled = false;
+            btnCancel.style.display = 'none';
             buildSpinner.style.display = 'none';
-            btnGerar.querySelector('span').innerText = 'GERAR ARQUIVO .AAB';
+            btnGerar.querySelector('span').innerText = 'GERAR APLICATIVO';
 
             statusInd.innerText = "❌ ERRO: Tempo Limite Excedido (12 min)";
             statusInd.style.background = '#e74c3c';
@@ -664,6 +736,18 @@
 
         const formData = new FormData(e.target);
         await fetch('/generate', { method: 'POST', body: formData });
+    };
+
+    btnCancel.onclick = async () => {
+        if (confirm('Tem certeza que deseja cancelar a geração do aplicativo?')) {
+            try {
+                await fetch('/cancel-build', { method: 'POST' });
+                showToast('Cancelamento solicitado.', 'success');
+            } catch (err) {
+                console.error(err);
+                showToast('Erro ao tentar cancelar.', 'error');
+            }
+        }
     };
 </script>
 </body>
