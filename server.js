@@ -295,6 +295,26 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
                 const ls = spawn(cmd, args, { cwd: buildDir, env, shell: true });
                 currentBuildProcesses.push(ls);
 
+                const handleInteractivePrompt = (clean) => {
+                    if (clean.includes('Accept? (y/N):')) {
+                        io.emit('log', "Detectada licença do Android SDK. Respondendo 'y'...");
+                        ls.stdin.write("y\n");
+                    }
+
+                    if (clean.includes('regenerate your project') || clean.includes('(Y/n)')) {
+                        io.emit('log', "Detectado pedido de regeneração. Respondendo 'Y'...");
+                        ls.stdin.write("Y\n");
+                    }
+
+                    if (clean.includes('versionName')) {
+                        ls.stdin.write(`${vName}\n`);
+                    }
+
+                    if (clean.includes('Password') && !clean.includes('*')) {
+                        ls.stdin.write(`${storePassword}\n`);
+                    }
+                };
+
                 ls.stdout.on('data', (data) => {
                     const clean = cleanLogs(data);
                     fs.appendFileSync(path.join(buildDir, 'build.log'), clean + '\n');
@@ -315,6 +335,7 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
                         ls.stdin.write(`${storePassword}\n`);
                     }
 
+                    handleInteractivePrompt(clean);
                     io.emit('log', clean);
                 });
 
