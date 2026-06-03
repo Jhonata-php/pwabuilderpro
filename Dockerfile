@@ -1,4 +1,4 @@
-FROM node:18-bullseye
+FROM node:20-bullseye
 
 # Java e dependências do sistema
 RUN apt-get update && apt-get install -y \
