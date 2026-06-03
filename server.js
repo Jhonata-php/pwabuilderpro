@@ -1,3 +1,16 @@
+// Polyfill para File (necessário no Node < 20 por dependências do undici)
+if (typeof globalThis.File === 'undefined') {
+    const { Blob } = require('buffer');
+    class File extends Blob {
+        constructor(parts, name, options = {}) {
+            super(parts, options);
+            this.name = name;
+            this.lastModified = options.lastModified || Date.now();
+        }
+    }
+    globalThis.File = File;
+}
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
