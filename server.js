@@ -355,17 +355,17 @@ app.post('/generate', upload.single('signingKey'), async (req, res) => {
         };
 
         io.emit('log', `> [1/3] Inicializando ambiente TWA...`);
-        await runCommand('npx', ['@bubblewrap/cli', 'init', '--manifest', 'twa-manifest.json', '--skipCheck', '--no-prompt']);
-        
+        await runCommand('bubblewrap', ['init', '--manifest', 'twa-manifest.json', '--skipCheck', '--no-prompt']);
+
         // Injeta limite local na pasta temp_build
         fs.writeFileSync(path.join(buildDir, 'gradle.properties'), "org.gradle.jvmargs=-Xmx512m\norg.gradle.daemon=false");
 
         io.emit('log', `> [2/3] Atualizando Manifesto e Assets...`);
-        await runCommand('npx', ['@bubblewrap/cli', 'update', '--skipCheck', '--no-prompt']);
+        await runCommand('bubblewrap', ['update', '--skipCheck', '--no-prompt']);
 
         io.emit('log', `> [3/3] Compilando APK/AAB (Econômico)...`);
-        const buildCode = await runCommand('npx', [
-            '@bubblewrap/cli', 'build', 
+        const buildCode = await runCommand('bubblewrap', [
+            'build',
             '--skipCheck',
             '--no-prompt',
             '--signingKeyPassword', storePassword,
