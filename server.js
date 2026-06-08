@@ -31,6 +31,7 @@ const upload = multer({ dest: './uploads/', limits: { fileSize: 20 * 1024 * 1024
 const publicDir = path.join(__dirname, 'public');
 
 let currentBuildProcesses = [];
+let buildInProgress = false;
 const GRADLE_PROPERTIES = [
   'org.gradle.jvmargs=-Xmx1024m',
   'org.gradle.daemon=false',
@@ -682,6 +683,7 @@ function findBuiltFile(buildDir, type) {
 app.post('/cancel-build', requirePanelAuth, (req, res) => {
   currentBuildProcesses.forEach(proc => { try { proc.kill('SIGKILL'); } catch (_) {} });
   currentBuildProcesses = [];
+  buildInProgress = false;
   io.emit('status', { success: false, msg: '❌ Build cancelado pelo usuário.', isSigned: false, hasLogs: true });
   io.emit('log', '> ❌ BUILD CANCELADO PELO USUÁRIO.');
   res.json({ success: true });
@@ -813,9 +815,13 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   } = req.body;
 
   if (!host || !appName) return res.status(400).json({ success: false, msg: 'Faltam campos obrigatórios: host e appName.' });
+  if (buildInProgress) {
+    return res.status(409).json({ success: false, msg: 'Já existe um build em andamento. Aguarde terminar ou clique em Cancelar.' });
+  }
 
   const buildDir = path.join(__dirname, 'temp_build');
   try {
+    buildInProgress = true;
     res.json({ success: true, message: 'Build started' });
 
     if (fs.existsSync(buildDir)) fs.rmSync(buildDir, { recursive: true, force: true });
@@ -988,6 +994,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
     io.emit('log', `❌ ERRO CRÍTICO: ${err.message}`);
     io.emit('status', { success: false, msg: `❌ ${err.message}`, isSigned: false, hasLogs: true });
   } finally {
+    buildInProgress = false;
     if (req.file?.path && fs.existsSync(req.file.path)) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     }
