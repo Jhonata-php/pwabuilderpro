@@ -41,6 +41,7 @@ const GRADLE_PROPERTIES = [
   'android.enableJetifier=true'
 ].join('\n') + '\n';
 const BUILD_STORAGE_DIR = path.join(__dirname, 'builds');
+const PROJECTS_FILE = path.join(__dirname, 'data', 'projects.json');
 const IOS_DEPLOYMENT_TARGET = '15.0';
 
 app.use(express.static(publicDir));
@@ -80,10 +81,50 @@ app.get('/session', requirePanelAuth, (req, res) => {
 
 app.get('/builds', requirePanelAuth, (req, res) => {
   const token = String(getPanelToken(req) || '');
+  const projectId = String(req.query.projectId || '').trim();
+  const items = listStoredBuilds().filter(item => !projectId || item.projectId === projectId);
   res.json({
     success: true,
-    items: listStoredBuilds().map(item => enrichBuildForClient(item, token))
+    items: items.map(item => enrichBuildForClient(item, token))
   });
+});
+
+app.get('/projects', requirePanelAuth, (req, res) => {
+  res.json({
+    success: true,
+    items: listProjectsWithSummary()
+  });
+});
+
+app.post('/projects', requirePanelAuth, (req, res) => {
+  const name = safeText(req.body?.name || '', 'Novo Projeto', 60);
+  const project = saveProjectRecord({
+    id: generateProjectId(name),
+    name,
+    host: normalizeUrl(req.body?.host || ''),
+    iconUrl: String(req.body?.iconUrl || '').trim(),
+    packageId: String(req.body?.packageId || '').trim(),
+    notes: String(req.body?.notes || '').trim(),
+    config: {}
+  });
+  res.json({ success: true, item: projectSummaryFromBuilds(project, listStoredBuilds()) });
+});
+
+app.put('/projects/:projectId', requirePanelAuth, (req, res) => {
+  const current = getProject(req.params.projectId);
+  if (!current) {
+    return res.status(404).json({ success: false, msg: 'Projeto não encontrado.' });
+  }
+  const updated = saveProjectRecord({
+    ...current,
+    name: safeText(req.body?.name || current.name || 'Projeto', 'Projeto', 60),
+    host: normalizeUrl(req.body?.host || current.host || ''),
+    iconUrl: String(req.body?.iconUrl || current.iconUrl || '').trim(),
+    packageId: String(req.body?.packageId || current.packageId || '').trim(),
+    notes: String(req.body?.notes || current.notes || '').trim(),
+    config: typeof req.body?.config === 'object' && req.body.config ? req.body.config : (current.config || {})
+  });
+  res.json({ success: true, item: projectSummaryFromBuilds(updated, listStoredBuilds()) });
 });
 
 
@@ -132,6 +173,77 @@ function buildMetadataPath(buildId) {
 function writeBuildMetadata(buildId, data) {
   ensureDir(buildDirForId(buildId));
   fs.writeFileSync(buildMetadataPath(buildId), JSON.stringify(data, null, 2));
+}
+
+function ensureProjectStore() {
+  ensureDir(path.dirname(PROJECTS_FILE));
+  if (!fileExists(PROJECTS_FILE)) {
+    fs.writeFileSync(PROJECTS_FILE, '[]\n');
+  }
+}
+
+function readProjects() {
+  ensureProjectStore();
+  try {
+    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8'));
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeProjects(projects) {
+  ensureProjectStore();
+  fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2));
+}
+
+function generateProjectId(name = 'projeto') {
+  return `prj-${slugify(name, 'projeto')}-${crypto.randomBytes(2).toString('hex')}`;
+}
+
+function projectSummaryFromBuilds(project, builds) {
+  const projectBuilds = builds.filter(item => item.projectId === project.id);
+  const lastBuild = projectBuilds[0] || null;
+  return {
+    ...project,
+    buildCount: projectBuilds.length,
+    lastBuildAt: lastBuild ? lastBuild.createdAt : '',
+    lastBuildStatus: lastBuild ? lastBuild.status : '',
+    lastBuildId: lastBuild ? lastBuild.id : ''
+  };
+}
+
+function listProjectsWithSummary() {
+  const builds = listStoredBuilds();
+  return readProjects()
+    .map(project => projectSummaryFromBuilds(project, builds))
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+
+function getProject(projectId) {
+  return readProjects().find(item => item.id === projectId) || null;
+}
+
+function saveProjectRecord(project) {
+  const projects = readProjects();
+  const index = projects.findIndex(item => item.id === project.id);
+  const payload = {
+    ...project,
+    updatedAt: new Date().toISOString()
+  };
+  if (index >= 0) {
+    projects[index] = {
+      ...projects[index],
+      ...payload
+    };
+  } else {
+    projects.unshift({
+      createdAt: new Date().toISOString(),
+      ...payload
+    });
+  }
+  writeProjects(projects);
+  return getProject(project.id);
 }
 
 function readBuildMetadata(buildId) {
@@ -1200,7 +1312,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   const {
     appName, host, versionCode, versionName, shortName, packageId, themeColor,
     backgroundColor, navColor, navDarkColor, iconUrl, startUrl, description,
-    iarc, displayMode, orientation, screenshots, buildAndroid, buildIos, androidArtifact
+    iarc, displayMode, orientation, screenshots, buildAndroid, buildIos, androidArtifact, projectId
   } = req.body;
 
   if (!host || !appName) return res.status(400).json({ success: false, msg: 'Faltam campos obrigatórios: host e appName.' });
@@ -1215,12 +1327,25 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   }
 
   const buildDir = path.join(__dirname, 'temp_build');
+  let currentProject = getProject(String(projectId || '').trim());
+  if (!currentProject) {
+    currentProject = saveProjectRecord({
+      id: generateProjectId(appName || host || 'projeto'),
+      name: safeText(appName || host || 'Projeto', 'Projeto', 60),
+      host: normalizeUrl(host || ''),
+      iconUrl: String(iconUrl || '').trim(),
+      packageId: String(packageId || '').trim(),
+      notes: '',
+      config: {}
+    });
+  }
   const buildId = generateBuildId(appName);
   const normalizedScreenshots = Array.isArray(screenshots)
     ? screenshots.map(item => String(item || '').trim()).filter(Boolean)
     : String(screenshots || '').trim() ? [String(screenshots).trim()] : [];
   let buildRecord = {
     id: buildId,
+    projectId: currentProject.id,
     appName: safeText(appName, 'App', 50),
     packageId: '',
     host: normalizeUrl(host),
@@ -1280,12 +1405,42 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
     fs.writeFileSync(path.join(buildDir, 'web-manifest-sanitized.json'), JSON.stringify(cleanWebManifest, null, 2));
     buildRecord = updateBuildRecord(buildId, {
       appName: safeAppName,
+      projectId: currentProject.id,
       packageId: finalPackageId,
       host: siteUrl,
       manifestUrl: webManifestUrl,
       iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : ''),
       versionName: vName,
       versionCode: vCode
+    });
+    currentProject = saveProjectRecord({
+      ...currentProject,
+      name: safeAppName,
+      host: siteUrl,
+      iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : ''),
+      packageId: finalPackageId,
+      config: {
+        appName: safeAppName,
+        host: siteUrl,
+        versionCode: vCode,
+        versionName: vName,
+        shortName: finalShortName,
+        packageId: finalPackageId,
+        themeColor: themeColor || '#000000',
+        backgroundColor: backgroundColor || '#ffffff',
+        navColor: navColor || '#000000',
+        navDarkColor: navDarkColor || '#000000',
+        iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : ''),
+        startUrl: startUrl || '/',
+        description: description || '',
+        iarc: iarc || '',
+        displayMode: displayMode || 'standalone',
+        orientation: orientation || 'portrait',
+        screenshots: normalizedScreenshots,
+        buildAndroid: wantsAndroid,
+        buildIos: wantsIos,
+        androidArtifact: androidMode
+      }
     });
 
     const artifacts = [];
@@ -1490,6 +1645,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       isSigned: wantsAndroid,
       hasLogs: true,
       buildId,
+      projectId: currentProject.id,
       build: enrichBuildForClient(buildRecord)
     });
   } catch (err) {
@@ -1515,6 +1671,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       isSigned: false,
       hasLogs: true,
       buildId,
+      projectId: currentProject ? currentProject.id : '',
       build: enrichBuildForClient(buildRecord)
     });
   } finally {
