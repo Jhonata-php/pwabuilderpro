@@ -31,6 +31,12 @@ const upload = multer({ dest: './uploads/', limits: { fileSize: 20 * 1024 * 1024
 const publicDir = path.join(__dirname, 'public');
 
 let currentBuildProcesses = [];
+const GRADLE_PROPERTIES = [
+  'org.gradle.jvmargs=-Xmx1024m',
+  'org.gradle.daemon=false',
+  'android.useAndroidX=true',
+  'android.enableJetifier=true'
+].join('\n') + '\n';
 
 app.use(express.static(publicDir));
 app.use(express.json({ limit: '20mb' }));
@@ -863,7 +869,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
 
     const gradleDir = path.join(process.env.HOME || '/root', '.gradle');
     fs.mkdirSync(gradleDir, { recursive: true });
-    fs.writeFileSync(path.join(gradleDir, 'gradle.properties'), 'org.gradle.jvmargs=-Xmx1024m\norg.gradle.daemon=false\n');
+    fs.writeFileSync(path.join(gradleDir, 'gradle.properties'), GRADLE_PROPERTIES);
 
     emitLog('> Configurando Bubblewrap com JDK/Android SDK fixos...');
     await runCommand('bubblewrap', ['updateConfig', '--jdkPath', javaHome, '--androidSdkPath', androidSdkPath], { cwd: buildDir, env, buildDir, promptAnswers: {} });
@@ -961,7 +967,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       await shared.generateManifestChecksumFile(twaPath, buildDir);
     }
 
-    fs.writeFileSync(path.join(buildDir, 'gradle.properties'), 'org.gradle.jvmargs=-Xmx1024m\norg.gradle.daemon=false\n');
+    fs.writeFileSync(path.join(buildDir, 'gradle.properties'), GRADLE_PROPERTIES);
 
     emitLog('> [2/3] Projeto gerado. Pulando bubblewrap update para evitar prompts interativos.');
 
