@@ -28,11 +28,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 1e8 });
 const upload = multer({ dest: './uploads/', limits: { fileSize: 20 * 1024 * 1024 } });
+const publicDir = path.join(__dirname, 'public');
 
 let currentBuildProcesses = [];
 
-app.use(express.static('public'));
+app.use(express.static(publicDir));
 app.use(express.json({ limit: '20mb' }));
+
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
 
 const PANEL_USER = process.env.PANEL_USER || 'admin';
 const PANEL_PASS = process.env.PANEL_PASS || 'admin123';
