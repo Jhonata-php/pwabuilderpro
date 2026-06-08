@@ -22,7 +22,8 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('crypto');
 const https = require('https');
-const { version: APP_VERSION } = require('./package.json');
+const APP_PACKAGE = require('./package.json');
+const { version: APP_VERSION } = APP_PACKAGE;
 
 const app = express();
 const server = http.createServer(app);
@@ -32,12 +33,15 @@ const publicDir = path.join(__dirname, 'public');
 
 let currentBuildProcesses = [];
 let buildInProgress = false;
+let activeBuildMeta = null;
 const GRADLE_PROPERTIES = [
   'org.gradle.jvmargs=-Xmx1024m',
   'org.gradle.daemon=false',
   'android.useAndroidX=true',
   'android.enableJetifier=true'
 ].join('\n') + '\n';
+const BUILD_STORAGE_DIR = path.join(__dirname, 'builds');
+const IOS_DEPLOYMENT_TARGET = '15.0';
 
 app.use(express.static(publicDir));
 app.use(express.json({ limit: '20mb' }));
@@ -74,6 +78,14 @@ app.get('/session', requirePanelAuth, (req, res) => {
   res.json({ success: true, version: APP_VERSION });
 });
 
+app.get('/builds', requirePanelAuth, (req, res) => {
+  const token = String(getPanelToken(req) || '');
+  res.json({
+    success: true,
+    items: listStoredBuilds().map(item => enrichBuildForClient(item, token))
+  });
+});
+
 
 function cleanLogs(text) {
   return text.toString().replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-z]/g, '');
@@ -81,6 +93,123 @@ function cleanLogs(text) {
 
 function emitLog(msg) {
   io.emit('log', msg);
+}
+
+function ensureDir(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function fileExists(target) {
+  try {
+    fs.accessSync(target);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function slugify(value, fallback = 'app') {
+  const out = stripAccents(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return out || fallback;
+}
+
+function generateBuildId(appName = 'app') {
+  return `${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${slugify(appName)}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
+function buildDirForId(buildId) {
+  return path.join(BUILD_STORAGE_DIR, buildId);
+}
+
+function buildMetadataPath(buildId) {
+  return path.join(buildDirForId(buildId), 'metadata.json');
+}
+
+function writeBuildMetadata(buildId, data) {
+  ensureDir(buildDirForId(buildId));
+  fs.writeFileSync(buildMetadataPath(buildId), JSON.stringify(data, null, 2));
+}
+
+function readBuildMetadata(buildId) {
+  const metaPath = buildMetadataPath(buildId);
+  if (!fileExists(metaPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+function listStoredBuilds() {
+  ensureDir(BUILD_STORAGE_DIR);
+  return fs.readdirSync(BUILD_STORAGE_DIR)
+    .map(id => readBuildMetadata(id))
+    .filter(Boolean)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+function artifactDownloadUrl(buildId, key, token) {
+  const suffix = token ? `?token=${encodeURIComponent(token)}` : '';
+  return `/builds/${encodeURIComponent(buildId)}/download/${encodeURIComponent(key)}${suffix}`;
+}
+
+function enrichBuildForClient(record, token = '') {
+  return {
+    ...record,
+    artifacts: Array.isArray(record.artifacts) ? record.artifacts.map(item => ({
+      ...item,
+      downloadUrl: artifactDownloadUrl(record.id, item.key, token)
+    })) : []
+  };
+}
+
+function archiveBuildArtifact(buildId, sourcePath, fileName, extra = {}) {
+  if (!fileExists(sourcePath)) return null;
+  const artifactsDir = path.join(buildDirForId(buildId), 'artifacts');
+  ensureDir(artifactsDir);
+  const finalPath = path.join(artifactsDir, fileName);
+  fs.copyFileSync(sourcePath, finalPath);
+  const stat = fs.statSync(finalPath);
+  return {
+    key: extra.key || path.parse(fileName).name,
+    label: extra.label || fileName,
+    fileName,
+    platform: extra.platform || 'other',
+    type: extra.type || path.extname(fileName).replace('.', '') || 'file',
+    size: stat.size,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function updateBuildRecord(buildId, patch) {
+  const current = readBuildMetadata(buildId) || { id: buildId };
+  const next = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString()
+  };
+  writeBuildMetadata(buildId, next);
+  return next;
+}
+
+async function zipDirectory(sourceDir, outFile, buildDir) {
+  ensureDir(path.dirname(outFile));
+  if (fileExists(outFile)) fs.rmSync(outFile, { force: true });
+  const code = await runCommand('zip', ['-r', outFile, path.basename(sourceDir)], {
+    cwd: path.dirname(sourceDir),
+    buildDir,
+    timeoutMs: 8 * 60 * 1000,
+    inactivityTimeoutMs: 2 * 60 * 1000,
+    heartbeatMs: 20 * 1000
+  });
+  if (code !== 0 || !fileExists(outFile)) {
+    throw new Error('Falha ao compactar os arquivos do build.');
+  }
+  return outFile;
 }
 
 function normalizeUrl(url) {
@@ -360,7 +489,15 @@ function writeLog(buildDir, msg) {
 }
 
 function runCommand(cmd, args, opts = {}) {
-  const { cwd, env = {}, buildDir, promptAnswers = {}, timeoutMs = 0 } = opts;
+  const {
+    cwd,
+    env = {},
+    buildDir,
+    promptAnswers = {},
+    timeoutMs = 0,
+    inactivityTimeoutMs = 0,
+    heartbeatMs = 0
+  } = opts;
   return new Promise((resolve) => {
     const resolvedCmd = resolveCommandPath(cmd);
     emitLog(`> ${resolvedCmd} ${args.join(' ')}`);
@@ -375,7 +512,11 @@ function runCommand(cmd, args, opts = {}) {
     let outputBuffer = '';
     const answered = new Set();
     let killedByTimeout = false;
+    let killedByInactivity = false;
     let timeoutHandle = null;
+    let inactivityHandle = null;
+    let heartbeatHandle = null;
+    let lastActivityAt = Date.now();
     if (timeoutMs && timeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
         killedByTimeout = true;
@@ -383,6 +524,34 @@ function runCommand(cmd, args, opts = {}) {
         emitLog(`❌ Timeout após ${Math.round(timeoutMs/1000)}s executando: ${resolvedCmd} ${args.join(' ')}`);
         try { child.kill('SIGKILL'); } catch (_) {}
       }, timeoutMs);
+    }
+
+    const refreshActivity = () => {
+      lastActivityAt = Date.now();
+    };
+
+    if (inactivityTimeoutMs && inactivityTimeoutMs > 0) {
+      inactivityHandle = setInterval(() => {
+        const idleMs = Date.now() - lastActivityAt;
+        if (idleMs < inactivityTimeoutMs) return;
+        killedByInactivity = true;
+        const idleSeconds = Math.round(idleMs / 1000);
+        const msg = `❌ Processo sem saída há ${idleSeconds}s: ${resolvedCmd} ${args.join(' ')}`;
+        writeLog(buildDir, msg);
+        emitLog(msg);
+        try { child.kill('SIGKILL'); } catch (_) {}
+      }, Math.min(15000, inactivityTimeoutMs));
+    }
+
+    if (heartbeatMs && heartbeatMs > 0) {
+      heartbeatHandle = setInterval(() => {
+        const idleMs = Date.now() - lastActivityAt;
+        if (idleMs >= heartbeatMs) {
+          const msg = `> Ainda compilando... sem novas linhas há ${Math.round(idleMs / 1000)}s.`;
+          writeLog(buildDir, msg);
+          emitLog(msg);
+        }
+      }, heartbeatMs);
     }
 
     const answerOnce = (key, answer, label) => {
@@ -430,12 +599,14 @@ function runCommand(cmd, args, opts = {}) {
     };
 
     child.stdout.on('data', (data) => {
+      refreshActivity();
       const clean = cleanLogs(data);
       writeLog(buildDir, clean);
       emitLog(clean);
       handlePrompts(clean);
     });
     child.stderr.on('data', (data) => {
+      refreshActivity();
       const clean = cleanLogs(data);
       writeLog(buildDir, `⚠️ ${clean}`);
       emitLog(`⚠️ ${clean}`);
@@ -447,16 +618,189 @@ function runCommand(cmd, args, opts = {}) {
     });
     child.on('close', (code) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (inactivityHandle) clearInterval(inactivityHandle);
+      if (heartbeatHandle) clearInterval(heartbeatHandle);
       const idx = currentBuildProcesses.indexOf(child);
       if (idx > -1) currentBuildProcesses.splice(idx, 1);
       if (killedByTimeout) {
         resolve(124);
         return;
       }
+      if (killedByInactivity) {
+        resolve(125);
+        return;
+      }
       if (code !== 0) { writeLog(buildDir, `❌ Processo finalizou com código ${code}: ${resolvedCmd}`); emitLog(`❌ Processo finalizou com código ${code}: ${resolvedCmd}`); }
       resolve(code);
     });
   });
+}
+
+function escapeGradleString(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}
+
+function configureGeneratedAndroidProject(buildDir, { keystorePath, keyAlias, storePassword, androidSdkPath }) {
+  const appGradlePath = path.join(buildDir, 'app', 'build.gradle');
+  if (!fs.existsSync(appGradlePath)) {
+    throw new Error('Projeto Android gerado sem app/build.gradle.');
+  }
+
+  let appGradle = fs.readFileSync(appGradlePath, 'utf8');
+  if (!appGradle.includes('signingConfigs {')) {
+    const signingBlock = [
+      'android {',
+      '    signingConfigs {',
+      '        release {',
+      `            storeFile file('${escapeGradleString(keystorePath)}')`,
+      `            storePassword '${escapeGradleString(storePassword)}'`,
+      `            keyAlias '${escapeGradleString(keyAlias)}'`,
+      `            keyPassword '${escapeGradleString(storePassword)}'`,
+      "            storeType 'PKCS12'",
+      '        }',
+      '    }'
+    ].join('\n');
+    appGradle = appGradle.replace('android {', signingBlock);
+  }
+
+  appGradle = appGradle.replace(
+    /buildTypes\s*\{\s*release\s*\{\s*minifyEnabled true/s,
+    "buildTypes {\n        release {\n            signingConfig signingConfigs.release\n            minifyEnabled true"
+  );
+  fs.writeFileSync(appGradlePath, appGradle);
+
+  const rootGradlePath = path.join(buildDir, 'build.gradle');
+  if (fs.existsSync(rootGradlePath)) {
+    let rootGradle = fs.readFileSync(rootGradlePath, 'utf8');
+    rootGradle = rootGradle.replace(/google\(\)\s*\n\s*jcenter\(\)/g, 'google()\n        mavenCentral()\n        jcenter()');
+    fs.writeFileSync(rootGradlePath, rootGradle);
+  }
+
+  const localPropertiesPath = path.join(buildDir, 'local.properties');
+  const sdkDir = String(androidSdkPath || '').replace(/\\/g, '\\\\');
+  fs.writeFileSync(localPropertiesPath, `sdk.dir=${sdkDir}\n`);
+}
+
+function createIosPackageJson() {
+  return {
+    name: 'pwa-ios-wrapper',
+    version: '1.0.0',
+    private: true,
+    scripts: {
+      'sync:ios': 'cap sync ios',
+      'open:ios': 'cap open ios'
+    },
+    dependencies: {
+      '@capacitor/core': APP_PACKAGE.dependencies['@capacitor/core'],
+      '@capacitor/ios': APP_PACKAGE.dependencies['@capacitor/ios']
+    },
+    devDependencies: {
+      '@capacitor/cli': APP_PACKAGE.dependencies['@capacitor/cli']
+    }
+  };
+}
+
+function patchIosProjectForDistribution(projectRoot) {
+  const podfilePath = path.join(projectRoot, 'ios', 'App', 'Podfile');
+  if (fileExists(podfilePath)) {
+    let podfile = fs.readFileSync(podfilePath, 'utf8');
+    podfile = podfile.replace(/require_relative\s+['"].*?node_modules\/@capacitor\/ios\/scripts\/pods_helpers['"]/g, "require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'");
+    podfile = podfile.replace(/:path\s*=>\s*['"].*?node_modules\/@capacitor\/ios['"]/g, ":path => '../../node_modules/@capacitor/ios'");
+    podfile = podfile.replace(/platform :ios,\s*'[^']+'/g, `platform :ios, '${IOS_DEPLOYMENT_TARGET}'`);
+    fs.writeFileSync(podfilePath, podfile);
+  }
+
+  const pbxprojPath = path.join(projectRoot, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+  if (fileExists(pbxprojPath)) {
+    const pbxproj = fs.readFileSync(pbxprojPath, 'utf8')
+      .replace(/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/g, `IPHONEOS_DEPLOYMENT_TARGET = ${IOS_DEPLOYMENT_TARGET};`);
+    fs.writeFileSync(pbxprojPath, pbxproj);
+  }
+}
+
+function writeIosReadme(projectRoot, { appName, packageId, siteUrl }) {
+  const readme = `# ${appName} iOS Wrapper
+
+Projeto base gerado para abrir a sua PWA no Xcode usando Capacitor.
+
+## O que este pacote entrega
+
+- Projeto iOS em \`ios/App\`
+- Configuracao do Capacitor apontando para \`${siteUrl}\`
+- Bundle identifier sugerido: \`${packageId}\`
+
+## Abrindo no Mac
+
+1. Rode \`npm install\` na raiz deste pacote.
+2. Rode \`npx cap sync ios\`.
+3. Entre em \`ios/App\` e rode \`pod install\`.
+4. Abra \`ios/App/App.xcworkspace\` no Xcode.
+
+## Observacoes
+
+- Este pacote e um projeto base para Xcode. A compilacao final do app iOS precisa ser feita em um Mac.
+- Se o CocoaPods pedir um target maior, mantenha o deployment target em ${IOS_DEPLOYMENT_TARGET} ou superior.
+`;
+  fs.writeFileSync(path.join(projectRoot, 'README-IOS.txt'), readme);
+}
+
+async function generateIosProject({ buildDir, appName, packageId, siteUrl, iconUrl }) {
+  const projectRoot = path.join(buildDir, 'ios-project');
+  fs.rmSync(projectRoot, { recursive: true, force: true });
+  ensureDir(path.join(projectRoot, 'www'));
+
+  fs.writeFileSync(path.join(projectRoot, 'package.json'), JSON.stringify(createIosPackageJson(), null, 2));
+  fs.writeFileSync(path.join(projectRoot, 'capacitor.config.json'), JSON.stringify({
+    appId: packageId,
+    appName,
+    webDir: 'www',
+    bundledWebRuntime: false,
+    server: {
+      url: siteUrl,
+      cleartext: siteUrl.startsWith('http://')
+    }
+  }, null, 2));
+  fs.writeFileSync(path.join(projectRoot, 'www', 'index.html'), `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${appName}</title></head><body><h1>${appName}</h1><p>Projeto iOS base apontando para ${siteUrl}.</p></body></html>`);
+  writeIosReadme(projectRoot, { appName, packageId, siteUrl });
+  if (iconUrl) {
+    fs.writeFileSync(path.join(projectRoot, 'icon-source.txt'), `${iconUrl}\n`);
+  }
+
+  const linkPath = path.join(projectRoot, 'node_modules');
+  try {
+    fs.symlinkSync(path.join(__dirname, 'node_modules'), linkPath, 'dir');
+  } catch (_) {
+  }
+
+  const capCli = path.join(__dirname, 'node_modules', '@capacitor', 'cli', 'bin', 'capacitor');
+  const capCode = await runCommand('node', [capCli, 'add', 'ios'], {
+    cwd: projectRoot,
+    buildDir,
+    timeoutMs: 8 * 60 * 1000,
+    inactivityTimeoutMs: 2 * 60 * 1000,
+    heartbeatMs: 20 * 1000
+  });
+  const xcodeprojPath = path.join(projectRoot, 'ios', 'App', 'App.xcodeproj');
+  const hasProject = fileExists(xcodeprojPath);
+  patchIosProjectForDistribution(projectRoot);
+  try {
+    if (fs.lstatSync(linkPath).isSymbolicLink()) fs.unlinkSync(linkPath);
+  } catch (_) {
+  }
+
+  if (!hasProject) {
+    throw new Error('Falha ao gerar o projeto base de Xcode.');
+  }
+  if (capCode !== 0) {
+    emitLog('⚠️ Projeto iOS/Xcode gerado com avisos. O pacote final inclui instruções para concluir no Mac.');
+  } else {
+    emitLog('> Projeto iOS/Xcode criado com sucesso.');
+  }
+
+  const zipPath = path.join(buildDir, 'dist', 'ios-xcode-project.zip');
+  return zipDirectory(projectRoot, zipPath, buildDir);
 }
 
 function tclEscape(value) {
@@ -684,8 +1028,15 @@ app.post('/cancel-build', requirePanelAuth, (req, res) => {
   currentBuildProcesses.forEach(proc => { try { proc.kill('SIGKILL'); } catch (_) {} });
   currentBuildProcesses = [];
   buildInProgress = false;
-  io.emit('status', { success: false, msg: '❌ Build cancelado pelo usuário.', isSigned: false, hasLogs: true });
+  if (activeBuildMeta && activeBuildMeta.id) {
+    updateBuildRecord(activeBuildMeta.id, {
+      status: 'cancelled',
+      errorMessage: 'Build cancelado pelo usuário.'
+    });
+  }
+  io.emit('status', { success: false, msg: '❌ Build cancelado pelo usuário.', isSigned: false, hasLogs: true, buildId: activeBuildMeta ? activeBuildMeta.id : '' });
   io.emit('log', '> ❌ BUILD CANCELADO PELO USUÁRIO.');
+  activeBuildMeta = null;
   res.json({ success: true });
 });
 
@@ -808,6 +1159,19 @@ app.get('/fetch-manifest', requirePanelAuth, async (req, res) => {
 });
 
 app.get('/download', requirePanelAuth, (req, res) => {
+  const buildId = String(req.query.buildId || '');
+  if (buildId) {
+    const record = readBuildMetadata(buildId);
+    if (!record) return res.status(404).send('Build não encontrado.');
+    const type = String(req.query.type || '');
+    const artifact = (record.artifacts || []).find(item => item.key === type || item.type === type);
+    if (artifact) {
+      const filePath = path.join(buildDirForId(buildId), 'artifacts', artifact.fileName);
+      if (fileExists(filePath)) return res.download(filePath, artifact.fileName);
+    }
+    return res.status(404).send('Artefato não encontrado.');
+  }
+
   const buildDir = path.join(__dirname, 'temp_build');
   const type = req.query.type;
   const logFile = path.join(buildDir, 'build.log');
@@ -821,29 +1185,69 @@ app.get('/download', requirePanelAuth, (req, res) => {
   res.status(404).send('Arquivo de build não encontrado.');
 });
 
+app.get('/builds/:buildId/download/:artifactKey', requirePanelAuth, (req, res) => {
+  const { buildId, artifactKey } = req.params;
+  const record = readBuildMetadata(buildId);
+  if (!record) return res.status(404).send('Build não encontrado.');
+  const artifact = (record.artifacts || []).find(item => item.key === artifactKey);
+  if (!artifact) return res.status(404).send('Artefato não encontrado.');
+  const filePath = path.join(buildDirForId(buildId), 'artifacts', artifact.fileName);
+  if (!fileExists(filePath)) return res.status(404).send('Arquivo não encontrado.');
+  return res.download(filePath, artifact.fileName);
+});
+
 app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req, res) => {
   const {
     appName, host, versionCode, versionName, shortName, packageId, themeColor,
     backgroundColor, navColor, navDarkColor, iconUrl, startUrl, description,
-    iarc, displayMode, orientation, screenshots
+    iarc, displayMode, orientation, screenshots, buildAndroid, buildIos, androidArtifact
   } = req.body;
 
   if (!host || !appName) return res.status(400).json({ success: false, msg: 'Faltam campos obrigatórios: host e appName.' });
+  const wantsAndroid = !['0', 'false', 'off'].includes(String(buildAndroid ?? '1').toLowerCase());
+  const wantsIos = ['1', 'true', 'on'].includes(String(buildIos ?? '').toLowerCase());
+  const androidMode = ['apk', 'aab', 'both'].includes(String(androidArtifact || '').toLowerCase()) ? String(androidArtifact).toLowerCase() : 'both';
+  if (!wantsAndroid && !wantsIos) {
+    return res.status(400).json({ success: false, msg: 'Selecione pelo menos um destino: Android e/ou iOS/Xcode.' });
+  }
   if (buildInProgress) {
     return res.status(409).json({ success: false, msg: 'Já existe um build em andamento. Aguarde terminar ou clique em Cancelar.' });
   }
 
   const buildDir = path.join(__dirname, 'temp_build');
+  const buildId = generateBuildId(appName);
+  const normalizedScreenshots = Array.isArray(screenshots)
+    ? screenshots.map(item => String(item || '').trim()).filter(Boolean)
+    : String(screenshots || '').trim() ? [String(screenshots).trim()] : [];
+  let buildRecord = {
+    id: buildId,
+    appName: safeText(appName, 'App', 50),
+    packageId: '',
+    host: normalizeUrl(host),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: 'running',
+    versionName: versionName || '',
+    versionCode: parseInt(versionCode, 10) || 1,
+    manifestUrl: '',
+    iconUrl: iconUrl || '',
+    targets: {
+      android: wantsAndroid,
+      androidMode,
+      ios: wantsIos
+    },
+    artifacts: []
+  };
+  writeBuildMetadata(buildId, buildRecord);
+  activeBuildMeta = buildRecord;
   try {
     buildInProgress = true;
-    res.json({ success: true, message: 'Build started' });
+    res.json({ success: true, message: 'Build started', buildId });
 
     if (fs.existsSync(buildDir)) fs.rmSync(buildDir, { recursive: true, force: true });
     fs.mkdirSync(buildDir, { recursive: true });
     writeLog(buildDir, 'Iniciando build...');
 
-    const javaHome = getJavaHome();
-    const androidSdkPath = getAndroidSdkPath();
     const cleanHost = cleanHostFromUrl(host);
     const siteUrl = normalizeUrl(host);
     const webManifestUrl = await resolveWebManifestUrl(siteUrl);
@@ -858,76 +1262,6 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
     const finalPackageId = safePackageId(packageId, cleanHost);
     const safeAppName = safeText(appName, 'App', 50);
     const finalShortName = safeLauncherName(shortName || appName, safeAppName.split(' ')[0] || 'App');
-    const keyAlias = 'app';
-    const storePassword = crypto.randomBytes(18).toString('base64url');
-    const keystorePath = path.join(buildDir, 'release-key.p12');
-
-    const env = {
-      JAVA_HOME: javaHome,
-      ANDROID_HOME: androidSdkPath,
-      ANDROID_SDK_ROOT: androidSdkPath,
-      PATH: `${process.env.PATH}:${androidSdkPath}/cmdline-tools/latest/bin:${androidSdkPath}/platform-tools:${androidSdkPath}/build-tools/34.0.0`,
-      BUBBLEWRAP_KEYSTORE_PASSWORD: storePassword,
-      BUBBLEWRAP_KEY_PASSWORD: storePassword,
-      JAVA_TOOL_OPTIONS: '-Xmx1024m',
-      _JAVA_OPTIONS: '-Xmx1024m',
-      GRADLE_OPTS: '-Xmx1024m -Dorg.gradle.daemon=false'
-    };
-
-    ensureBubblewrapConfig(javaHome, androidSdkPath);
-
-    emitLog('> [INICIANDO] Limpando ambiente e gerando assinatura automática...');
-    emitLog(`> JAVA_HOME: ${javaHome}`);
-    emitLog(`> ANDROID_SDK_ROOT: ${androidSdkPath}`);
-    emitLog(`> Web Manifest usado: ${webManifestUrl}`);
-    if (!fs.existsSync(path.join(androidSdkPath, 'platform-tools'))) {
-      emitLog('⚠️ platform-tools não encontrado no Android SDK informado. Verifique o Dockerfile.');
-    }
-    if (!fs.existsSync(path.join(androidSdkPath, 'cmdline-tools'))) {
-      emitLog('⚠️ cmdline-tools não encontrado no Android SDK informado. Verifique o Dockerfile.');
-    }
-
-    const gradleDir = path.join(process.env.HOME || '/root', '.gradle');
-    fs.mkdirSync(gradleDir, { recursive: true });
-    fs.writeFileSync(path.join(gradleDir, 'gradle.properties'), GRADLE_PROPERTIES);
-
-    emitLog('> Configurando Bubblewrap com JDK/Android SDK fixos...');
-    await runCommand('bubblewrap', ['updateConfig', '--jdkPath', javaHome, '--androidSdkPath', androidSdkPath], { cwd: buildDir, env, buildDir, promptAnswers: {} });
-
-    const dn = `CN=${safeAppName}, OU=Apps, O=Need Solutions, L=Urania, ST=SP, C=BR`;
-    const keyCode = await runCommand('keytool', [
-      '-genkeypair', '-v', '-keystore', keystorePath, '-storetype', 'PKCS12',
-      '-storepass', storePassword, '-keypass', storePassword,
-      '-alias', keyAlias, '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000',
-      '-dname', dn
-    ], { cwd: buildDir, env, buildDir });
-    if (keyCode !== 0) throw new Error('Falha ao gerar keystore automaticamente.');
-    fs.writeFileSync(path.join(buildDir, 'keystore-info.json'), JSON.stringify({ path: keystorePath, alias: keyAlias, storePassword }, null, 2));
-
-    emitLog('> [1/3] Inicializando projeto Android/TWA pelo Web Manifest...');
-    const promptAnswers = {
-      jdkPath: javaHome,
-      androidSdkPath,
-      domain: cleanHost,
-      urlPath: startUrl || '/',
-      appName: safeAppName,
-      shortName: finalShortName,
-      packageId: finalPackageId,
-      versionCode: String(vCode),
-      versionName: vName,
-      keystorePath,
-      keyAlias,
-      storePassword,
-      statusColor: themeColor || '#000000',
-      navColor: navColor || '#000000',
-      themeColor: themeColor || '#000000',
-      backgroundColor: backgroundColor || '#ffffff',
-      orientation: orientation || 'portrait',
-      display: displayMode || 'standalone',
-      iconUrl: iconUrl || '',
-      maskableIconUrl: iconUrl || ''
-    };
-
     const cleanWebManifest = buildCleanWebManifest({
       originalManifest: originalWebManifest,
       manifestUrl: webManifestUrl,
@@ -941,74 +1275,251 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       orientation,
       description,
       iconUrl,
-      screenshots
+      screenshots: normalizedScreenshots
     });
     fs.writeFileSync(path.join(buildDir, 'web-manifest-sanitized.json'), JSON.stringify(cleanWebManifest, null, 2));
-    if (!promptAnswers.iconUrl && cleanWebManifest.icons && cleanWebManifest.icons[0] && cleanWebManifest.icons[0].src) {
-      promptAnswers.iconUrl = cleanWebManifest.icons[0].src;
-      promptAnswers.maskableIconUrl = cleanWebManifest.icons[0].src;
+    buildRecord = updateBuildRecord(buildId, {
+      appName: safeAppName,
+      packageId: finalPackageId,
+      host: siteUrl,
+      manifestUrl: webManifestUrl,
+      iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : ''),
+      versionName: vName,
+      versionCode: vCode
+    });
+
+    const artifacts = [];
+
+    if (wantsAndroid) {
+      const javaHome = getJavaHome();
+      const androidSdkPath = getAndroidSdkPath();
+      const keyAlias = 'app';
+      const storePassword = crypto.randomBytes(18).toString('base64url');
+      const keystorePath = path.join(buildDir, 'release-key.p12');
+      const env = {
+        JAVA_HOME: javaHome,
+        ANDROID_HOME: androidSdkPath,
+        ANDROID_SDK_ROOT: androidSdkPath,
+        PATH: `${process.env.PATH}:${androidSdkPath}/cmdline-tools/latest/bin:${androidSdkPath}/platform-tools:${androidSdkPath}/build-tools/34.0.0`,
+        BUBBLEWRAP_KEYSTORE_PASSWORD: storePassword,
+        BUBBLEWRAP_KEY_PASSWORD: storePassword,
+        JAVA_TOOL_OPTIONS: '-Xmx1024m',
+        _JAVA_OPTIONS: '-Xmx1024m',
+        GRADLE_OPTS: '-Xmx1024m -Dorg.gradle.daemon=false'
+      };
+
+      ensureBubblewrapConfig(javaHome, androidSdkPath);
+      emitLog('> [ANDROID] Limpando ambiente e gerando assinatura automática...');
+      emitLog(`> JAVA_HOME: ${javaHome}`);
+      emitLog(`> ANDROID_SDK_ROOT: ${androidSdkPath}`);
+      emitLog(`> Web Manifest usado: ${webManifestUrl}`);
+      if (!fs.existsSync(path.join(androidSdkPath, 'platform-tools'))) {
+        emitLog('⚠️ platform-tools não encontrado no Android SDK informado. Verifique o Dockerfile.');
+      }
+      if (!fs.existsSync(path.join(androidSdkPath, 'cmdline-tools'))) {
+        emitLog('⚠️ cmdline-tools não encontrado no Android SDK informado. Verifique o Dockerfile.');
+      }
+
+      const gradleDir = path.join(process.env.HOME || '/root', '.gradle');
+      fs.mkdirSync(gradleDir, { recursive: true });
+      fs.writeFileSync(path.join(gradleDir, 'gradle.properties'), GRADLE_PROPERTIES);
+
+      emitLog('> Configurando Bubblewrap com JDK/Android SDK fixos...');
+      await runCommand('bubblewrap', ['updateConfig', '--jdkPath', javaHome, '--androidSdkPath', androidSdkPath], { cwd: buildDir, env, buildDir, promptAnswers: {} });
+
+      const dn = `CN=${safeAppName}, OU=Apps, O=Need Solutions, L=Urania, ST=SP, C=BR`;
+      const keyCode = await runCommand('keytool', [
+        '-genkeypair', '-v', '-keystore', keystorePath, '-storetype', 'PKCS12',
+        '-storepass', storePassword, '-keypass', storePassword,
+        '-alias', keyAlias, '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000',
+        '-dname', dn
+      ], { cwd: buildDir, env, buildDir });
+      if (keyCode !== 0) throw new Error('Falha ao gerar keystore automaticamente.');
+      fs.writeFileSync(path.join(buildDir, 'keystore-info.json'), JSON.stringify({ path: keystorePath, alias: keyAlias, storePassword }, null, 2));
+
+      emitLog('> [ANDROID] Inicializando projeto Android/TWA pelo Web Manifest...');
+      const promptAnswers = {
+        jdkPath: javaHome,
+        androidSdkPath,
+        domain: cleanHost,
+        urlPath: startUrl || '/',
+        appName: safeAppName,
+        shortName: finalShortName,
+        packageId: finalPackageId,
+        versionCode: String(vCode),
+        versionName: vName,
+        keystorePath,
+        keyAlias,
+        storePassword,
+        statusColor: themeColor || '#000000',
+        navColor: navColor || '#000000',
+        themeColor: themeColor || '#000000',
+        backgroundColor: backgroundColor || '#ffffff',
+        orientation: orientation || 'portrait',
+        display: displayMode || 'standalone',
+        iconUrl: iconUrl || '',
+        maskableIconUrl: iconUrl || ''
+      };
+      if (!promptAnswers.iconUrl && cleanWebManifest.icons && cleanWebManifest.icons[0] && cleanWebManifest.icons[0].src) {
+        promptAnswers.iconUrl = cleanWebManifest.icons[0].src;
+        promptAnswers.maskableIconUrl = cleanWebManifest.icons[0].src;
+      }
+
+      emitLog('> Manifest sanitizado criado para evitar loop nos prompts do Bubblewrap.');
+      const localManifest = await startLocalManifestServer(cleanWebManifest, buildDir);
+      let initCode = 1;
+      try {
+        initCode = await generateBubblewrapProjectDirect({ buildDir, manifestUrl: localManifest.url, promptAnswers });
+      } finally {
+        try { localManifest.server.close(); } catch (_) {}
+      }
+      if (initCode !== 0) throw new Error('Falha ao gerar projeto Android/TWA. Baixe o build-error.log para ver detalhes.');
+
+      const twaPath = path.join(buildDir, 'twa-manifest.json');
+      if (fs.existsSync(twaPath)) {
+        const twa = JSON.parse(fs.readFileSync(twaPath, 'utf8'));
+        twa.packageId = finalPackageId;
+        twa.host = cleanHost;
+        twa.name = safeAppName;
+        twa.launcherName = finalShortName;
+        twa.display = displayMode || twa.display || 'standalone';
+        twa.startUrl = startUrl || twa.startUrl || '/';
+        twa.themeColor = themeColor || twa.themeColor || '#000000';
+        twa.navigationColor = navColor || twa.navigationColor || '#000000';
+        twa.navigationColorDark = navDarkColor || twa.navigationColorDark || '#000000';
+        twa.backgroundColor = backgroundColor || twa.backgroundColor || '#ffffff';
+        twa.orientation = orientation || twa.orientation || 'any';
+        twa.enableNotifications = true;
+        twa.signingKey = { path: keystorePath, alias: keyAlias };
+        twa.appVersionCode = vCode;
+        twa.appVersionName = vName;
+        if (iconUrl) twa.iconUrl = iconUrl;
+        if (description) twa.description = description;
+        if (iarc) twa.iarcRatingId = iarc;
+        if (normalizedScreenshots.length) twa.screenshots = normalizedScreenshots.map(u => ({ src: u, sizes: '1080x1920', type: 'image/png' }));
+        fs.writeFileSync(twaPath, JSON.stringify(twa, null, 2));
+        const shared = require('@bubblewrap/cli/dist/lib/cmds/shared');
+        await shared.generateManifestChecksumFile(twaPath, buildDir);
+      }
+
+      fs.writeFileSync(path.join(buildDir, 'gradle.properties'), GRADLE_PROPERTIES);
+      configureGeneratedAndroidProject(buildDir, { keystorePath, keyAlias, storePassword, androidSdkPath });
+
+      emitLog('> [ANDROID] Projeto gerado. Construindo via Gradle em modo direto...');
+      const androidTasks = [];
+      if (androidMode === 'both' || androidMode === 'aab') androidTasks.push('bundleRelease');
+      if (androidMode === 'both' || androidMode === 'apk') androidTasks.push('assembleRelease');
+      const buildCode = await runCommand(path.join(buildDir, 'gradlew'), [
+        ...androidTasks,
+        '--console=plain',
+        '--no-daemon',
+        '--stacktrace'
+      ], {
+        cwd: buildDir,
+        env: {
+          ...env,
+          CI: '1',
+          TERM: 'dumb'
+        },
+        buildDir,
+        promptAnswers,
+        timeoutMs: 25 * 60 * 1000,
+        inactivityTimeoutMs: 4 * 60 * 1000,
+        heartbeatMs: 20 * 1000
+      });
+      if (buildCode !== 0) throw new Error('Falha ao compilar o pacote Android.');
+
+      if (androidMode === 'both' || androidMode === 'aab') {
+        const aabFile = findBuiltFile(buildDir, 'aab');
+        if (!aabFile) throw new Error('O build Android terminou sem gerar o arquivo AAB.');
+        const aabArtifact = archiveBuildArtifact(buildId, aabFile, `${slugify(safeAppName)}-${buildId}.aab`, {
+          key: 'aab',
+          label: 'Android App Bundle',
+          platform: 'android',
+          type: 'aab'
+        });
+        if (aabArtifact) artifacts.push(aabArtifact);
+      }
+      if (androidMode === 'both' || androidMode === 'apk') {
+        const apkFile = findBuiltFile(buildDir, 'apk');
+        if (!apkFile) throw new Error('O build Android terminou sem gerar o arquivo APK.');
+        const apkArtifact = archiveBuildArtifact(buildId, apkFile, `${slugify(safeAppName)}-${buildId}.apk`, {
+          key: 'apk',
+          label: 'Android APK',
+          platform: 'android',
+          type: 'apk'
+        });
+        if (apkArtifact) artifacts.push(apkArtifact);
+      }
     }
-    emitLog('> Manifest sanitizado criado para evitar loop nos prompts do Bubblewrap.');
-    const localManifest = await startLocalManifestServer(cleanWebManifest, buildDir);
-    let initCode = 1;
-    try {
-      initCode = await generateBubblewrapProjectDirect({ buildDir, manifestUrl: localManifest.url, promptAnswers });
-    } finally {
-      try { localManifest.server.close(); } catch (_) {}
-    }
-    if (initCode !== 0) throw new Error('Falha ao gerar projeto Android/TWA. Baixe o build-error.log para ver detalhes.');
 
-    // Garante manifest local correto caso o Bubblewrap tenha aceitado valores padrão diferentes.
-    const twaPath = path.join(buildDir, 'twa-manifest.json');
-    if (fs.existsSync(twaPath)) {
-      const twa = JSON.parse(fs.readFileSync(twaPath, 'utf8'));
-      twa.packageId = finalPackageId;
-      twa.host = cleanHost;
-      twa.name = safeAppName;
-      twa.launcherName = finalShortName;
-      twa.display = displayMode || twa.display || 'standalone';
-      twa.startUrl = startUrl || twa.startUrl || '/';
-      twa.themeColor = themeColor || twa.themeColor || '#000000';
-      twa.navigationColor = navColor || twa.navigationColor || '#000000';
-      twa.navigationColorDark = navDarkColor || twa.navigationColorDark || '#000000';
-      twa.backgroundColor = backgroundColor || twa.backgroundColor || '#ffffff';
-      twa.orientation = orientation || twa.orientation || 'any';
-      twa.enableNotifications = true;
-      twa.signingKey = { path: keystorePath, alias: keyAlias };
-      twa.appVersionCode = vCode;
-      twa.appVersionName = vName;
-      if (iconUrl) twa.iconUrl = iconUrl;
-      if (description) twa.description = description;
-      if (iarc) twa.iarcRatingId = iarc;
-      const validScreenshots = screenshots ? (Array.isArray(screenshots) ? screenshots : [screenshots]).filter(u => String(u).trim()) : [];
-      if (validScreenshots.length) twa.screenshots = validScreenshots.map(u => ({ src: u, sizes: '1080x1920', type: 'image/png' }));
-      fs.writeFileSync(twaPath, JSON.stringify(twa, null, 2));
-      const shared = require('@bubblewrap/cli/dist/lib/cmds/shared');
-      await shared.generateManifestChecksumFile(twaPath, buildDir);
+    if (wantsIos) {
+      emitLog('> [IOS] Gerando projeto base para Xcode...');
+      const iosZip = await generateIosProject({
+        buildDir,
+        appName: safeAppName,
+        packageId: finalPackageId,
+        siteUrl,
+        iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : '')
+      });
+      const iosArtifact = archiveBuildArtifact(buildId, iosZip, `${slugify(safeAppName)}-${buildId}-ios-xcode.zip`, {
+        key: 'ios',
+        label: 'Projeto iOS/Xcode',
+        platform: 'ios',
+        type: 'zip'
+      });
+      if (iosArtifact) artifacts.push(iosArtifact);
     }
 
-    fs.writeFileSync(path.join(buildDir, 'gradle.properties'), GRADLE_PROPERTIES);
+    const logArtifact = archiveBuildArtifact(buildId, path.join(buildDir, 'build.log'), `${slugify(safeAppName)}-${buildId}-build.log`, {
+      key: 'log',
+      label: 'Log do build',
+      platform: 'system',
+      type: 'log'
+    });
+    if (logArtifact) artifacts.push(logArtifact);
 
-    emitLog('> [2/3] Projeto gerado. Pulando bubblewrap update para evitar prompts interativos.');
-
-    emitLog('> [3/3] Construindo Android App Bundle...');
-    const buildCode = await runCommand('bubblewrap', [
-      'build', '--skipCheck',
-      '--signingKeyPassword', storePassword,
-      '--signingKeyAliasPassword', storePassword
-    ], { cwd: buildDir, env, buildDir, promptAnswers, timeoutMs: 25 * 60 * 1000 });
-
-    if (buildCode === 0 && findBuiltFile(buildDir)) {
-      io.emit('status', { success: true, msg: '✅ SUCESSO! O download já está disponível.', isSigned: true });
-    } else {
-      io.emit('status', { success: false, msg: '❌ O build finalizou, mas o APK/AAB não foi encontrado. Baixe o log.', isSigned: false, hasLogs: true });
-    }
+    buildRecord = updateBuildRecord(buildId, {
+      status: 'success',
+      artifacts
+    });
+    activeBuildMeta = buildRecord;
+    io.emit('status', {
+      success: true,
+      msg: '✅ SUCESSO! Seus arquivos estão prontos para baixar.',
+      isSigned: wantsAndroid,
+      hasLogs: true,
+      buildId,
+      build: enrichBuildForClient(buildRecord)
+    });
   } catch (err) {
     writeLog(buildDir, `❌ ERRO CRÍTICO: ${err.message}`);
     io.emit('log', `❌ ERRO CRÍTICO: ${err.message}`);
-    io.emit('status', { success: false, msg: `❌ ${err.message}`, isSigned: false, hasLogs: true });
+    const errorArtifacts = [];
+    const logArtifact = archiveBuildArtifact(buildId, path.join(buildDir, 'build.log'), `${slugify(appName)}-${buildId}-build.log`, {
+      key: 'log',
+      label: 'Log do build',
+      platform: 'system',
+      type: 'log'
+    });
+    if (logArtifact) errorArtifacts.push(logArtifact);
+    buildRecord = updateBuildRecord(buildId, {
+      status: 'error',
+      errorMessage: err.message,
+      artifacts: errorArtifacts
+    });
+    activeBuildMeta = buildRecord;
+    io.emit('status', {
+      success: false,
+      msg: `❌ ${err.message}`,
+      isSigned: false,
+      hasLogs: true,
+      buildId,
+      build: enrichBuildForClient(buildRecord)
+    });
   } finally {
     buildInProgress = false;
+    activeBuildMeta = null;
     if (req.file?.path && fs.existsSync(req.file.path)) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     }

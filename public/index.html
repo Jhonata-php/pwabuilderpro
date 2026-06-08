@@ -1,84 +1,1132 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PWA Builder Pro</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    :root{--bg:#07111f;--side:#0f172a;--card:#172033;--card2:#1f2c42;--line:#334155;--txt:#e5e7eb;--muted:#94a3b8;--green:#22c55e;--cyan:#22d3ee;--red:#ef4444;--orange:#f97316;--shadow:0 18px 45px rgba(0,0,0,.32)}
-    *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(135deg,#06101e,#0f172a 55%,#111827);color:var(--txt);font-family:Inter,Segoe UI,Arial,sans-serif;overflow:hidden}label{display:block;margin:12px 0 7px;font-size:.86rem;font-weight:800;color:#cbd5e1}input,textarea,select{width:100%;border:1px solid var(--line);background:#0f172a;color:var(--txt);border-radius:12px;padding:12px;font-size:14px;outline:none}textarea{min-height:84px;resize:vertical}input:focus,textarea:focus,select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.14)}button{border:0;border-radius:12px;padding:12px 16px;background:var(--green);color:#04111f;font-weight:900;cursor:pointer}button:hover{filter:brightness(1.08)}button:disabled{opacity:.55;cursor:not-allowed}button.secondary{background:#334155;color:var(--txt)}button.danger{background:var(--red);color:#fff}button.orange{background:var(--orange);color:#fff}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hint{font-size:.8rem;color:var(--muted);line-height:1.4}.mini{margin-top:12px;padding:12px;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08);border-radius:14px;color:#bbf7d0;font-size:.82rem;line-height:1.45}.login{position:fixed;inset:0;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at top,#1f2c42 0,#07111f 62%);z-index:10}.login-card{width:min(450px,100%);padding:30px;background:rgba(23,32,51,.96);border:1px solid rgba(148,163,184,.22);border-radius:24px;box-shadow:var(--shadow)}.brand{display:flex;align-items:center;gap:13px}.badge{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,var(--cyan),var(--green));color:#03101d;font-weight:1000}.brand h1{margin:0;font-size:1.35rem}.brand p{margin:3px 0 0;color:var(--muted);font-size:.9rem}.auth-error{min-height:20px;margin-top:10px;color:#fecaca}.app{display:none;height:100vh;grid-template-columns:400px 1fr}.sidebar{height:100vh;overflow:auto;padding:20px;background:rgba(15,23,42,.96);border-right:1px solid var(--line)}.side-top{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,rgba(15,23,42,1),rgba(15,23,42,.88));padding-bottom:14px;margin-bottom:8px}.icon-preview{display:none;margin-left:auto;width:56px;height:56px;border-radius:16px;object-fit:cover;border:1px solid var(--line)}.section{margin-bottom:14px;padding:16px;background:rgba(23,32,51,.84);border:1px solid var(--line);border-radius:18px}.section h3{margin:0 0 12px;color:#67e8f9;font-size:1rem}.screens-row{display:flex;gap:8px;margin-bottom:8px}.screens-row button{width:44px;padding:0}.main{height:100vh;min-width:0;padding:20px;display:grid;grid-template-rows:auto auto 1fr auto;gap:14px;overflow:hidden}.topbar{padding:16px 18px;background:rgba(23,32,51,.9);border:1px solid var(--line);border-radius:18px;display:flex;align-items:center;justify-content:space-between;gap:14px}.topbar h2{margin:0;font-size:1.2rem}.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.statusbar{display:none;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;background:rgba(15,23,42,.96);border:1px solid rgba(34,211,238,.55);border-radius:16px;box-shadow:var(--shadow)}.status-left{display:flex;gap:12px;align-items:center}.spinner{width:26px;height:26px;border:4px solid #334155;border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.timer{font-weight:1000;color:#67e8f9}.download-panel{display:none;padding:15px 16px;background:rgba(20,83,45,.33);border:1px solid rgba(34,197,94,.55);border-radius:18px}.download-panel h3{margin:0 0 8px;color:#86efac}.downloads{display:flex;gap:10px;flex-wrap:wrap}.log-card{min-height:0;background:#020617;border:1px solid #1f2937;border-radius:18px;overflow:hidden;display:grid;grid-template-rows:auto 1fr}.log-head{padding:14px 16px;background:linear-gradient(90deg,#d97706,#ea580c);font-weight:1000;display:flex;align-items:center;justify-content:space-between}.log-body{margin:0;padding:16px;height:100%;overflow:auto;color:#39ff14;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.48;white-space:pre-wrap}.footer-row{display:grid;grid-template-columns:1fr 260px;gap:14px;min-height:110px}.history{padding:14px 16px;background:rgba(23,32,51,.82);border:1px solid var(--line);border-radius:18px;overflow:auto}.history ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}.history li{padding:9px 10px;background:#0f172a;border:1px solid var(--line);border-radius:12px;font-size:.84rem;color:#cbd5e1}.system-card{padding:14px 16px;background:rgba(23,32,51,.82);border:1px solid var(--line);border-radius:18px}.ok{color:#86efac}.warn{color:#fde68a}@media(max-width:1000px){body{overflow:auto}.app{height:auto;display:none;grid-template-columns:1fr}.sidebar{height:auto;max-height:none;border-right:0;border-bottom:1px solid var(--line)}.main{height:auto;min-height:80vh;overflow:visible}.footer-row{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+    :root{
+      --bg:#06111b;
+      --bg2:#091827;
+      --panel:#0d1726;
+      --panel2:#122033;
+      --card:#15253a;
+      --line:rgba(148,163,184,.18);
+      --line-strong:rgba(94,234,212,.34);
+      --text:#ebf4ff;
+      --muted:#92a3bd;
+      --cyan:#5eead4;
+      --cyan-2:#22d3ee;
+      --green:#4ade80;
+      --orange:#fb923c;
+      --red:#f87171;
+      --blue:#60a5fa;
+      --shadow:0 30px 80px rgba(2,6,23,.45);
+      --radius:24px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      color:var(--text);
+      font-family:"Space Grotesk",system-ui,sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(34,211,238,.12), transparent 24%),
+        radial-gradient(circle at 85% 12%, rgba(251,146,60,.12), transparent 20%),
+        linear-gradient(145deg, var(--bg), var(--bg2) 58%, #101826);
+      overflow:hidden;
+    }
+    body::before,body::after{
+      content:"";
+      position:fixed;
+      inset:auto;
+      pointer-events:none;
+      filter:blur(10px);
+      opacity:.6;
+    }
+    body::before{
+      top:5%;
+      right:4%;
+      width:280px;
+      height:280px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(34,211,238,.2), transparent 70%);
+    }
+    body::after{
+      bottom:8%;
+      left:6%;
+      width:320px;
+      height:320px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(74,222,128,.12), transparent 70%);
+    }
+    a{color:inherit}
+    button,input,textarea,select{font:inherit}
+    button{
+      border:0;
+      border-radius:16px;
+      padding:13px 18px;
+      background:linear-gradient(135deg,var(--green),#22c55e);
+      color:#052410;
+      font-weight:700;
+      cursor:pointer;
+      transition:transform .18s ease,filter .18s ease,opacity .18s ease;
+    }
+    button:hover{transform:translateY(-1px);filter:brightness(1.05)}
+    button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    button.secondary{background:rgba(71,85,105,.88);color:#e2e8f0}
+    button.ghost{background:rgba(15,23,42,.66);color:#dbeafe;border:1px solid var(--line)}
+    button.danger{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff}
+    button.orange{background:linear-gradient(135deg,#fb923c,#f97316);color:#fff}
+    button.blue{background:linear-gradient(135deg,#38bdf8,#2563eb);color:#eff6ff}
+    input,textarea,select{
+      width:100%;
+      border:1px solid rgba(148,163,184,.2);
+      background:rgba(9,16,28,.82);
+      color:var(--text);
+      border-radius:16px;
+      padding:13px 14px;
+      outline:none;
+      transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    input:focus,textarea:focus,select:focus{
+      border-color:var(--cyan-2);
+      box-shadow:0 0 0 4px rgba(34,211,238,.12);
+    }
+    textarea{min-height:92px;resize:vertical}
+    label{
+      display:block;
+      margin:0 0 8px;
+      font-size:.84rem;
+      font-weight:700;
+      color:#d7e4f7;
+      letter-spacing:.02em;
+    }
+    .hint{font-size:.84rem;color:var(--muted);line-height:1.5}
+    .tiny{font-size:.76rem;color:var(--muted)}
+    .login{
+      position:fixed;
+      inset:0;
+      display:grid;
+      place-items:center;
+      padding:24px;
+      backdrop-filter:blur(12px);
+      background:rgba(4,10,18,.56);
+      z-index:20;
+    }
+    .login-card{
+      width:min(440px,100%);
+      background:linear-gradient(180deg, rgba(13,23,38,.98), rgba(10,17,29,.98));
+      border:1px solid rgba(148,163,184,.18);
+      border-radius:30px;
+      box-shadow:var(--shadow);
+      padding:32px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:16px;
+    }
+    .brand-mark{
+      width:62px;
+      height:62px;
+      border-radius:20px;
+      background:linear-gradient(135deg,var(--cyan),var(--green));
+      color:#03131d;
+      display:grid;
+      place-items:center;
+      font-weight:800;
+      font-size:1.1rem;
+      box-shadow:0 18px 40px rgba(34,211,238,.18);
+    }
+    .brand h1,.top-copy h2,.section-title,.panel-title,.console-head strong,.download-head strong,.library-title strong,.stat strong{margin:0}
+    .brand p,.top-copy p{margin:5px 0 0;color:var(--muted)}
+    .auth-error{min-height:22px;margin-top:10px;color:#fecaca}
+    .app{
+      display:none;
+      grid-template-columns:380px minmax(0,1fr);
+      height:100vh;
+    }
+    .sidebar{
+      height:100vh;
+      overflow:auto;
+      padding:22px;
+      background:linear-gradient(180deg, rgba(10,18,30,.94), rgba(8,14,24,.98));
+      border-right:1px solid var(--line);
+    }
+    .sidebar::-webkit-scrollbar,.main::-webkit-scrollbar,.library-grid::-webkit-scrollbar,.console-body::-webkit-scrollbar{width:10px;height:10px}
+    .sidebar::-webkit-scrollbar-thumb,.main::-webkit-scrollbar-thumb,.library-grid::-webkit-scrollbar-thumb,.console-body::-webkit-scrollbar-thumb{background:rgba(71,85,105,.6);border-radius:999px}
+    .sidebar-top{
+      position:sticky;
+      top:0;
+      z-index:2;
+      padding-bottom:18px;
+      margin-bottom:16px;
+      background:linear-gradient(180deg, rgba(10,18,30,1), rgba(10,18,30,.92), transparent);
+    }
+    .icon-preview{
+      display:none;
+      margin-left:auto;
+      width:64px;
+      height:64px;
+      border-radius:20px;
+      object-fit:cover;
+      border:1px solid rgba(148,163,184,.22);
+      background:#0b1220;
+    }
+    .pill-row,.top-actions,.stats,.target-grid,.build-actions,.downloads,.artifact-row,.card-meta,.chip-row,.screens-row,.toggle-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .hero-pill,.target-chip,.mini-chip,.artifact-chip{
+      border:1px solid rgba(148,163,184,.18);
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:.78rem;
+      background:rgba(15,23,42,.76);
+      color:#d9e5f7;
+    }
+    .hero-pill strong,.mini-chip strong{color:#fff}
+    .section{
+      background:linear-gradient(180deg, rgba(18,32,51,.9), rgba(12,22,36,.9));
+      border:1px solid var(--line);
+      border-radius:24px;
+      padding:18px;
+      margin-bottom:14px;
+      box-shadow:0 20px 44px rgba(2,6,23,.16);
+    }
+    .section-title{
+      font-size:1rem;
+      margin-bottom:14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .target-grid{display:grid;grid-template-columns:1fr;gap:12px}
+    .target-card{
+      border:1px solid rgba(148,163,184,.16);
+      border-radius:20px;
+      padding:14px;
+      background:rgba(8,14,24,.55);
+      display:grid;
+      gap:8px;
+    }
+    .target-card.active{
+      border-color:rgba(94,234,212,.35);
+      box-shadow:inset 0 0 0 1px rgba(94,234,212,.14);
+      background:linear-gradient(180deg, rgba(15,37,47,.64), rgba(9,17,28,.64));
+    }
+    .target-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .switch{
+      position:relative;
+      width:52px;
+      height:30px;
+      border-radius:999px;
+      background:#233145;
+      flex:0 0 auto;
+    }
+    .switch input{position:absolute;inset:0;opacity:0;cursor:pointer}
+    .switch span{
+      position:absolute;
+      top:4px;
+      left:4px;
+      width:22px;
+      height:22px;
+      border-radius:50%;
+      background:#fff;
+      transition:transform .2s ease;
+    }
+    .switch input:checked + span{
+      transform:translateX(22px);
+      background:#032412;
+    }
+    .switch:has(input:checked){
+      background:linear-gradient(135deg,var(--cyan-2),var(--green));
+    }
+    .screens-row{
+      margin-bottom:8px;
+      align-items:stretch;
+    }
+    .screens-row input{flex:1}
+    .screens-row button{width:48px;padding:0}
+    .build-button{
+      width:100%;
+      margin-top:10px;
+      padding:16px 18px;
+      font-size:1rem;
+      letter-spacing:.03em;
+      border-radius:18px;
+      background:linear-gradient(135deg,#34d399,#22c55e);
+      box-shadow:0 20px 35px rgba(34,197,94,.18);
+    }
+    .main{
+      height:100vh;
+      overflow:auto;
+      padding:22px;
+      display:grid;
+      grid-template-rows:auto auto auto minmax(0,1fr);
+      gap:16px;
+    }
+    .topbar,.status-shell,.console-shell,.library-shell,.downloads-shell{
+      border:1px solid var(--line);
+      border-radius:28px;
+      background:linear-gradient(180deg, rgba(17,27,44,.88), rgba(10,17,30,.9));
+      box-shadow:var(--shadow);
+    }
+    .topbar{
+      padding:20px 22px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:16px;
+      align-items:center;
+    }
+    .top-copy h2{font-size:1.5rem}
+    .stats{
+      margin-top:16px;
+      gap:12px;
+    }
+    .stat{
+      min-width:128px;
+      padding:14px 16px;
+      border-radius:20px;
+      background:rgba(9,16,28,.74);
+      border:1px solid rgba(148,163,184,.14);
+    }
+    .stat strong{display:block;font-size:1.5rem}
+    .status-shell{
+      padding:18px 20px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:16px;
+      align-items:center;
+    }
+    .status-main{display:flex;gap:16px;align-items:center}
+    .status-orb{
+      width:56px;
+      height:56px;
+      border-radius:18px;
+      background:linear-gradient(135deg, rgba(34,211,238,.2), rgba(74,222,128,.18));
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(94,234,212,.2);
+      font-size:1.5rem;
+    }
+    .spinner{
+      width:28px;
+      height:28px;
+      border-radius:50%;
+      border:3px solid rgba(148,163,184,.24);
+      border-top-color:var(--cyan-2);
+      animation:spin 1s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .timer{
+      font-family:"IBM Plex Mono",monospace;
+      color:#a5f3fc;
+      font-size:1.1rem;
+      font-weight:500;
+    }
+    .console-shell{
+      min-height:360px;
+      overflow:hidden;
+      display:grid;
+      grid-template-rows:auto minmax(0,1fr);
+    }
+    .console-head{
+      padding:15px 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      background:linear-gradient(90deg,#f59e0b,#f97316 68%,#ef4444);
+      color:#fff7ed;
+    }
+    .console-body{
+      margin:0;
+      min-height:0;
+      max-height:46vh;
+      overflow:auto;
+      padding:18px;
+      background:#020617;
+      color:#47ff6a;
+      font-family:"IBM Plex Mono",monospace;
+      font-size:13px;
+      line-height:1.55;
+      white-space:pre-wrap;
+    }
+    .grid-bottom{
+      display:grid;
+      grid-template-columns:minmax(320px,1.15fr) minmax(280px,.85fr);
+      gap:16px;
+      min-height:0;
+    }
+    .downloads-shell,.library-shell{
+      padding:18px;
+      min-height:0;
+    }
+    .download-head,.library-title{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    .downloads-shell{
+      display:grid;
+      gap:14px;
+      align-content:start;
+      background:
+        linear-gradient(180deg, rgba(13,52,38,.9), rgba(9,19,26,.94)),
+        radial-gradient(circle at top right, rgba(74,222,128,.16), transparent 32%);
+      border-color:rgba(74,222,128,.2);
+    }
+    .downloads{gap:12px}
+    .downloads button{min-width:132px}
+    .library-shell{
+      display:grid;
+      grid-template-rows:auto minmax(0,1fr);
+      background:
+        linear-gradient(180deg, rgba(15,25,42,.92), rgba(9,15,26,.95)),
+        radial-gradient(circle at top right, rgba(96,165,250,.12), transparent 28%);
+    }
+    .library-grid{
+      display:grid;
+      gap:12px;
+      overflow:auto;
+      min-height:0;
+      padding-right:4px;
+    }
+    .build-card{
+      border:1px solid rgba(148,163,184,.14);
+      border-radius:22px;
+      padding:16px;
+      background:linear-gradient(180deg, rgba(12,20,33,.94), rgba(8,13,23,.94));
+      transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .build-card:hover{
+      transform:translateY(-2px);
+      border-color:rgba(94,234,212,.26);
+      box-shadow:0 18px 36px rgba(2,6,23,.22);
+    }
+    .build-head{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+      margin-bottom:10px;
+    }
+    .build-name{font-size:1rem;font-weight:700}
+    .status-badge{
+      border-radius:999px;
+      padding:7px 11px;
+      font-size:.76rem;
+      font-weight:700;
+      text-transform:uppercase;
+      letter-spacing:.03em;
+    }
+    .status-success{background:rgba(34,197,94,.16);color:#bbf7d0;border:1px solid rgba(34,197,94,.24)}
+    .status-error{background:rgba(248,113,113,.16);color:#fecaca;border:1px solid rgba(248,113,113,.24)}
+    .status-running{background:rgba(34,211,238,.14);color:#a5f3fc;border:1px solid rgba(34,211,238,.24)}
+    .status-cancelled{background:rgba(251,146,60,.14);color:#fed7aa;border:1px solid rgba(251,146,60,.24)}
+    .card-meta{
+      color:var(--muted);
+      font-size:.8rem;
+      margin-bottom:12px;
+    }
+    .artifact-row{margin-top:12px}
+    .artifact-row button{padding:10px 12px;border-radius:12px;font-size:.82rem}
+    .empty-state{
+      border:1px dashed rgba(148,163,184,.24);
+      border-radius:20px;
+      padding:22px;
+      color:var(--muted);
+      background:rgba(8,13,22,.38);
+    }
+    .manifest-card{
+      padding:18px;
+      border-radius:24px;
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(16,29,45,.9), rgba(11,18,29,.95));
+    }
+    .manifest-card b{display:block;margin-bottom:8px}
+    .ok{color:#86efac}
+    .warn{color:#fde68a}
+    .muted{color:var(--muted)}
+    @media (max-width:1180px){
+      body{overflow:auto}
+      .app{grid-template-columns:1fr;height:auto}
+      .sidebar,.main{height:auto}
+      .grid-bottom{grid-template-columns:1fr}
+      .topbar,.status-shell{grid-template-columns:1fr}
+      .console-body{max-height:360px}
+    }
+    @media (max-width:720px){
+      .sidebar,.main{padding:16px}
+      .row-2{grid-template-columns:1fr}
+      .stats{display:grid;grid-template-columns:1fr 1fr}
+      .downloads button{width:100%}
+      .top-actions,.build-actions{width:100%}
+      .top-actions button,.build-actions button{flex:1}
+    }
   </style>
 </head>
 <body>
-<div id="login" class="login"><div class="login-card"><div class="brand"><div class="badge">PWA</div><div><h1>PWA Builder Pro</h1><p>Gerador Android TWA com build automático</p></div></div><label>Usuário</label><input id="loginUser" value="admin" autocomplete="username"><label>Senha</label><input id="loginPass" type="password" value="admin123" autocomplete="current-password"><button id="btnLogin" style="width:100%;margin-top:18px">Entrar</button><div id="loginError" class="auth-error"></div><p class="hint">Altere com PANEL_USER e PANEL_PASS no Easypanel.</p></div></div>
-<div id="app" class="app">
-  <aside class="sidebar">
-    <div class="side-top"><div class="brand"><div class="badge">PWA</div><div><h1>PWA Builder Pro</h1><p>Configure, compile e baixe AAB/APK</p></div><img id="iconPreview" class="icon-preview"></div></div>
-    <form id="buildForm">
-      <div class="section"><h3>🌐 Origem da PWA</h3><label>URL do site/PWA</label><input id="hostInput" name="host" placeholder="https://portal.wconect.com.br/portal" required><button type="button" id="btnFetch" class="secondary" style="width:100%;margin-top:10px">Buscar dados automáticos</button><label>Start URL / Scope</label><input id="startUrl" name="startUrl" value="/"></div>
-      <div class="section"><h3>🆔 Identidade</h3><label>Nome do App</label><input id="appName" name="appName" required placeholder="WConect"><label>Nome curto</label><input id="shortName" name="shortName" placeholder="WConect" maxlength="12"><label>Package ID</label><input id="packageId" name="packageId" placeholder="br.com.wconect.portal.app"><input type="hidden" id="iconUrl" name="iconUrl"></div>
-      <div class="section"><h3>📄 Detalhes</h3><label>Descrição</label><textarea id="description" name="description" placeholder="Descrição do aplicativo"></textarea><label>IARC Rating ID</label><input id="iarc" name="iarc" placeholder="Opcional"><div class="row"><div><label>Display</label><select id="displayMode" name="displayMode"><option value="standalone">Standalone</option><option value="fullscreen">Fullscreen</option><option value="minimal-ui">Minimal UI</option><option value="browser">Browser</option></select></div><div><label>Orientação</label><select id="orientation" name="orientation"><option value="portrait">Portrait</option><option value="portrait-primary">Portrait primary</option><option value="any">Any</option><option value="landscape">Landscape</option></select></div></div><label>Screenshots (URLs)</label><div id="screenshotsContainer"><div class="screens-row"><input name="screenshots" placeholder="https://exemplo.com/screenshot.png"><button type="button" class="danger btnRemoveScreenshot">×</button></div></div><button type="button" id="btnAddScreenshot" class="secondary" style="width:100%;margin-top:6px">+ Adicionar screenshot</button></div>
-      <div class="section"><h3>🎨 Cores</h3><div class="row"><div><label>Theme</label><input type="color" id="themeColor" name="themeColor" value="#000000"></div><div><label>Background</label><input type="color" id="backgroundColor" name="backgroundColor" value="#ffffff"></div></div><div class="row"><div><label>Nav</label><input type="color" id="navColor" name="navColor" value="#000000"></div><div><label>Nav Dark</label><input type="color" id="navDarkColor" name="navDarkColor" value="#000000"></div></div></div>
-      <div class="section"><h3>⚙️ Build</h3><div class="row"><div><label>Version Name</label><input id="versionName" name="versionName" value="1.0.0"></div><div><label>Version Code</label><input id="versionCode" name="versionCode" type="number" value="1" min="1"></div></div><div class="mini">🔐 Assinatura automática: a keystore é criada no backend e usada no build. Guarde o pacote gerado para futuras atualizações.</div></div>
-      <button id="btnBuild" style="width:100%;font-size:1rem;margin-bottom:18px">GERAR APLICATIVO</button>
-    </form>
-  </aside>
-  <main class="main">
-    <div class="topbar"><div><h2>Console de Build</h2><div class="hint">A barra de progresso não cobre mais o log nem o botão cancelar.</div></div><div class="actions"><button id="btnClear" class="secondary">Limpar log</button><button id="btnCancel" class="danger" disabled>Cancelar</button><button id="btnLogout" class="secondary">Sair</button></div></div>
-    <div id="statusbar" class="statusbar"><div class="status-left"><div class="spinner"></div><strong id="statusText">Processando...</strong></div><div class="actions"><span id="timer" class="timer">00:00</span><button id="btnCancelBottom" class="danger">Cancelar</button></div></div>
-    <section class="log-card"><div class="log-head"><span id="logTitle">Aguardando build...</span><span>☰</span></div><pre id="log" class="log-body">Pronto para gerar seu aplicativo. Preencha os dados e clique em GERAR APLICATIVO.</pre></section>
-    <div class="footer-row"><div id="downloadPanel" class="download-panel"><h3>✅ Build concluído</h3><p>Baixe os arquivos gerados abaixo.</p><div class="downloads"><button id="btnDownloadAab">Baixar AAB</button><button id="btnDownloadApk" class="secondary">Baixar APK</button><button id="btnDownloadLog" class="orange">Baixar Log</button></div></div><div class="system-card"><b>Dados encontrados</b><p id="manifestSummary" class="hint">Clique em Buscar dados automáticos para preencher os campos.</p><hr style="border-color:#334155;border-width:1px 0 0;margin:10px 0"><b>Status do sistema</b><p class="hint"><span class="ok">●</span> JDK/SDK configurados pelo Docker<br><span class="ok">●</span> Keystore automática<br><span class="warn">●</span> Faça rebuild sem cache ao atualizar</p></div><div class="history"><strong>Histórico rápido</strong><ul id="historyList"></ul></div></div>
-  </main>
-</div>
-<script>
-const socket=io();let token=localStorage.getItem('pwa_token')||'';let buildRunning=false,startTime=0,timerInt=null;const $=id=>document.getElementById(id);
-function showLogin(msg=''){ $('app').style.display='none'; $('login').style.display='grid'; $('loginError').textContent=msg; }
-function showApp(){ $('login').style.display='none'; $('app').style.display='grid'; $('loginError').textContent=''; renderHistory(); }
-function clearSession(msg='Sessão expirada. Faça login novamente.'){ token=''; localStorage.removeItem('pwa_token'); buildRunning=false; clearInterval(timerInt); $('statusbar').style.display='none'; $('btnCancel').disabled=true; $('btnBuild').disabled=false; showLogin(msg); }
-function authHeaders(){return token?{'x-panel-token':token}:{};}
-async function apiFetch(url,options={}){ const opts={...options,headers:{...(options.headers||{}),...authHeaders()}}; const r=await fetch(url,opts); if(r.status===401){ let msg='Sessão expirada. Faça login novamente.'; try{const j=await r.clone().json(); if(j&&j.msg) msg=j.msg;}catch(_){} clearSession(msg); throw new Error(msg); } return r; }
-async function validateSession(){ if(!token){ showLogin(); return; } try{ const r=await apiFetch('/session'); const j=await r.json().catch(()=>({})); if(j.success) showApp(); else clearSession(); }catch(e){ if(token) $('loginError').textContent=e.message||'Sessão inválida.'; } }
-$('btnLogin').onclick=async()=>{ $('loginError').textContent=''; try{const r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('loginUser').value,password:$('loginPass').value})}); const j=await r.json().catch(()=>({})); if(j.success){token=j.token;localStorage.setItem('pwa_token',token);showApp();}else $('loginError').textContent=j.msg||'Falha no login';}catch(e){$('loginError').textContent='Erro de conexão.'}};
-$('btnLogout').onclick=()=>clearSession('');
-function appendLog(msg){const el=$('log'); if(el.textContent.startsWith('Pronto para')) el.textContent=''; const clean=String(msg).replace(/(storepass|keypass)\s+[^\s]+/gi,'$1 ******'); el.textContent+=clean.endsWith('\n')?clean:clean+'\n'; el.scrollTop=el.scrollHeight;}
-socket.on('log',appendLog);socket.on('status',s=>{buildRunning=false;clearInterval(timerInt);$('statusbar').style.display='none';$('btnCancel').disabled=true;$('btnBuild').disabled=false;$('logTitle').textContent=s.success?'✅ Build concluído':'❌ Build com erro';appendLog('\n'+(s.msg||''));$('downloadPanel').style.display=s.success||s.hasLogs?'block':'none';$('downloadPanel').querySelector('h3').textContent=s.success?'✅ Build concluído':'❌ Build com erro';$('downloadPanel').querySelector('p').textContent=s.success?'Baixe os arquivos gerados abaixo.':'Baixe o log para ver o erro completo.';$('btnDownloadAab').style.display=s.success?'inline-block':'none';$('btnDownloadApk').style.display=s.success?'inline-block':'none';if(s.success)addHistory();});
-function tick(){const sec=Math.floor((Date.now()-startTime)/1000);$('timer').textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');}
-$('buildForm').addEventListener('submit',async e=>{e.preventDefault();buildRunning=true;startTime=Date.now();tick();timerInt=setInterval(tick,1000);$('statusbar').style.display='flex';$('statusText').textContent='Compilando pacote...';$('btnCancel').disabled=false;$('btnBuild').disabled=true;$('downloadPanel').style.display='none';$('logTitle').textContent='⚙️ Construindo Android Bundle...';$('log').textContent='';const fd=new FormData(e.target);try{const r=await apiFetch('/generate',{method:'POST',body:fd});const j=await r.json();if(!j.success)throw new Error(j.msg||'Não foi possível iniciar.');appendLog('> Build iniciado no servidor...');}catch(err){appendLog('❌ '+err.message);buildRunning=false;$('statusbar').style.display='none';$('btnBuild').disabled=false;}});
-async function cancelBuild(){if(!buildRunning)return;try{await apiFetch('/cancel-build',{method:'POST'});}catch(_){}}$('btnCancel').onclick=cancelBuild;$('btnCancelBottom').onclick=cancelBuild;$('btnClear').onclick=()=>{$('log').textContent=''};
-function setField(id,value){if(value!==undefined&&value!==null&&String(value).trim()!=='')$(id).value=value;}
-function setSelect(id,value){if(value&&[...$(id).options].some(o=>o.value===value))$(id).value=value;}
-function colorOrDefault(v,def){return /^#[0-9a-fA-F]{6}$/.test(String(v||''))?v:def;}
-$('btnFetch').onclick=async()=>{
-  const url=$('hostInput').value.trim();
-  if(!url)return alert('Informe a URL.');
-  $('btnFetch').disabled=true; $('btnFetch').textContent='Buscando...';
-  appendLog('> Buscando manifest de '+url);
-  try{
-    const r=await apiFetch('/fetch-manifest?url='+encodeURIComponent(url));
-    const d=await r.json();
-    if(!r.ok||d.error)throw new Error(d.error||'Falha ao buscar dados.');
-    setField('appName',d.appName);
-    setField('shortName',(d.shortName||d.appName||'').substring(0,12));
-    setField('packageId',d.packageId);
-    setField('startUrl',d.startUrl||'/');
-    setField('description',d.description);
-    $('themeColor').value=colorOrDefault(d.themeColor,$('themeColor').value);
-    $('backgroundColor').value=colorOrDefault(d.backgroundColor,$('backgroundColor').value);
-    setSelect('displayMode',d.display);
-    setSelect('orientation',d.orientation);
-    setField('iarc',d.iarc_rating_id);
-    if(d.iconUrl){$('iconUrl').value=d.iconUrl;$('iconPreview').src=d.iconUrl;$('iconPreview').style.display='block';}
-    if(d.screenshots&&d.screenshots.length){$('screenshotsContainer').innerHTML='';d.screenshots.slice(0,8).forEach(addScreenshot);}
-    $('manifestSummary').innerHTML=`<span class="ok">●</span> Manifest: ${d.manifestUrl||'detectado'}<br><span class="ok">●</span> Nome: ${d.appName||'-'}<br><span class="ok">●</span> Pacote sugerido: ${d.packageId||'-'}<br><span class="ok">●</span> Ícone: ${d.iconUrl?'encontrado':'não encontrado'}`;
-    appendLog('> Dados carregados e campos preenchidos.');
-    appendLog('> Manifest usado: '+(d.manifestUrl||'não informado'));
-  }catch(e){appendLog('❌ Erro ao buscar manifest: '+e.message); if(token) alert('Erro ao buscar manifest: '+e.message)}
-  finally{$('btnFetch').disabled=false;$('btnFetch').textContent='Buscar dados automáticos';}
-};
-function addScreenshot(v=''){const div=document.createElement('div');div.className='screens-row';div.innerHTML=`<input name="screenshots" placeholder="https://exemplo.com/screenshot.png" value="${String(v).replace(/"/g,'&quot;')}"><button type="button" class="danger btnRemoveScreenshot">×</button>`;div.querySelector('button').onclick=()=>div.remove();$('screenshotsContainer').appendChild(div);}$('btnAddScreenshot').onclick=()=>addScreenshot();document.querySelectorAll('.btnRemoveScreenshot').forEach(b=>b.onclick=()=>b.parentElement.remove());
-function dl(type){ if(!token){ clearSession(); return; } let u='/download?type='+type+'&token='+encodeURIComponent(token); window.open(u,'_blank'); }$('btnDownloadAab').onclick=()=>dl('aab');$('btnDownloadApk').onclick=()=>dl('apk');$('btnDownloadLog').onclick=()=>dl('log');
-function addHistory(){const h=JSON.parse(localStorage.getItem('pwa_history')||'[]');h.unshift({app:$('appName').value,pkg:$('packageId').value,date:new Date().toLocaleString()});localStorage.setItem('pwa_history',JSON.stringify(h.slice(0,8)));renderHistory();}function renderHistory(){const h=JSON.parse(localStorage.getItem('pwa_history')||'[]');$('historyList').innerHTML=h.map(x=>`<li><b>${x.app||'App'}</b><br><span>${x.pkg||''}</span><br><small>${x.date}</small></li>`).join('')||'<li>Nenhum build ainda.</li>';}
-validateSession();
-</script>
-</body></html>
+  <div id="login" class="login">
+    <div class="login-card">
+      <div class="brand">
+        <div class="brand-mark">PWA</div>
+        <div>
+          <h1>PWA Builder Pro</h1>
+          <p>Painel para Android, biblioteca de builds e projeto base para Xcode.</p>
+        </div>
+      </div>
+      <div style="margin-top:22px">
+        <label for="loginUser">Usuário</label>
+        <input id="loginUser" value="admin" autocomplete="username">
+        <label for="loginPass" style="margin-top:14px">Senha</label>
+        <input id="loginPass" type="password" value="admin123" autocomplete="current-password">
+        <button id="btnLogin" style="width:100%;margin-top:18px">Entrar no painel</button>
+        <div id="loginError" class="auth-error"></div>
+        <p class="hint">Credenciais controladas por <code>PANEL_USER</code> e <code>PANEL_PASS</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="app">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="brand-mark">PWA</div>
+          <div>
+            <h1>PWA Builder Pro</h1>
+            <p>Monte, gere e redistribua seus apps com histórico persistente.</p>
+          </div>
+          <img id="iconPreview" class="icon-preview" alt="Ícone do app">
+        </div>
+        <div class="pill-row" style="margin-top:14px">
+          <span class="hero-pill"><strong>Android</strong> APK / AAB</span>
+          <span class="hero-pill"><strong>iOS</strong> projeto Xcode</span>
+        </div>
+      </div>
+
+      <form id="buildForm">
+        <section class="section">
+          <h3 class="section-title">Destino do build</h3>
+          <div class="target-grid">
+            <div id="androidTargetCard" class="target-card active">
+              <div class="target-head">
+                <div>
+                  <strong>Android</strong>
+                  <p class="hint" style="margin:6px 0 0">Gera APK, AAB ou os dois via Gradle sem prompt interativo.</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="buildAndroid" checked>
+                  <span></span>
+                </label>
+              </div>
+              <div class="row-2">
+                <div>
+                  <label for="androidArtifact">Saída Android</label>
+                  <select id="androidArtifact" name="androidArtifact">
+                    <option value="both">APK + AAB</option>
+                    <option value="apk">Só APK</option>
+                    <option value="aab">Só AAB</option>
+                  </select>
+                </div>
+                <div class="hint" style="display:flex;align-items:end">Ideal para Play Store e distribuição direta.</div>
+              </div>
+            </div>
+
+            <div id="iosTargetCard" class="target-card">
+              <div class="target-head">
+                <div>
+                  <strong>iOS / Xcode</strong>
+                  <p class="hint" style="margin:6px 0 0">Gera um projeto base com Capacitor para abrir no Xcode depois.</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="buildIos">
+                  <span></span>
+                </label>
+              </div>
+              <div class="tiny">O build final do iOS continua sendo feito no Mac, mas o projeto já sai pronto para download.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h3 class="section-title">Origem da PWA</h3>
+          <label for="hostInput">URL do site/PWA</label>
+          <input id="hostInput" name="host" placeholder="https://orion.needbr.com" required>
+          <div class="build-actions" style="margin-top:12px">
+            <button type="button" id="btnFetch" class="secondary" style="flex:1">Buscar dados automáticos</button>
+          </div>
+          <label for="startUrl" style="margin-top:14px">Start URL / Scope</label>
+          <input id="startUrl" name="startUrl" value="/">
+        </section>
+
+        <section class="section">
+          <h3 class="section-title">Identidade</h3>
+          <label for="appName">Nome do app</label>
+          <input id="appName" name="appName" placeholder="Orion" required>
+          <div class="row-2" style="margin-top:12px">
+            <div>
+              <label for="shortName">Nome curto</label>
+              <input id="shortName" name="shortName" maxlength="12" placeholder="Orion">
+            </div>
+            <div>
+              <label for="packageId">Package ID</label>
+              <input id="packageId" name="packageId" placeholder="com.needbr.orion.app">
+            </div>
+          </div>
+          <input type="hidden" id="iconUrl" name="iconUrl">
+        </section>
+
+        <section class="section">
+          <h3 class="section-title">Detalhes</h3>
+          <label for="description">Descrição</label>
+          <textarea id="description" name="description" placeholder="Descrição do aplicativo"></textarea>
+          <div class="row-2" style="margin-top:12px">
+            <div>
+              <label for="displayMode">Display</label>
+              <select id="displayMode" name="displayMode">
+                <option value="standalone">Standalone</option>
+                <option value="fullscreen">Fullscreen</option>
+                <option value="minimal-ui">Minimal UI</option>
+                <option value="browser">Browser</option>
+              </select>
+            </div>
+            <div>
+              <label for="orientation">Orientação</label>
+              <select id="orientation" name="orientation">
+                <option value="portrait">Portrait</option>
+                <option value="portrait-primary">Portrait primary</option>
+                <option value="any">Any</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </div>
+          </div>
+          <label for="iarc" style="margin-top:12px">IARC Rating ID</label>
+          <input id="iarc" name="iarc" placeholder="Opcional">
+          <label style="margin-top:14px">Screenshots (URLs)</label>
+          <div id="screenshotsContainer">
+            <div class="screens-row">
+              <input name="screenshots" placeholder="https://exemplo.com/screenshot.png">
+              <button type="button" class="danger btnRemoveScreenshot">×</button>
+            </div>
+          </div>
+          <button type="button" id="btnAddScreenshot" class="ghost" style="width:100%;margin-top:6px">+ Adicionar screenshot</button>
+        </section>
+
+        <section class="section">
+          <h3 class="section-title">Cores e versão</h3>
+          <div class="row-2">
+            <div>
+              <label for="themeColor">Theme</label>
+              <input type="color" id="themeColor" name="themeColor" value="#0f172a">
+            </div>
+            <div>
+              <label for="backgroundColor">Background</label>
+              <input type="color" id="backgroundColor" name="backgroundColor" value="#ffffff">
+            </div>
+          </div>
+          <div class="row-2" style="margin-top:12px">
+            <div>
+              <label for="navColor">Nav</label>
+              <input type="color" id="navColor" name="navColor" value="#0f172a">
+            </div>
+            <div>
+              <label for="navDarkColor">Nav Dark</label>
+              <input type="color" id="navDarkColor" name="navDarkColor" value="#020617">
+            </div>
+          </div>
+          <div class="row-2" style="margin-top:12px">
+            <div>
+              <label for="versionName">Version Name</label>
+              <input id="versionName" name="versionName" value="1.0.0">
+            </div>
+            <div>
+              <label for="versionCode">Version Code</label>
+              <input id="versionCode" name="versionCode" type="number" value="1" min="1">
+            </div>
+          </div>
+          <div class="hint" style="margin-top:12px">A assinatura Android é gerada automaticamente. Cada build salvo pode ser baixado novamente pela biblioteca.</div>
+        </section>
+
+        <button id="btnBuild" class="build-button">GERAR APLICATIVO</button>
+      </form>
+    </aside>
+
+    <main class="main">
+      <section class="topbar">
+        <div class="top-copy">
+          <h2>Central de Builds</h2>
+          <p>Gere Android e iOS a partir da mesma PWA, acompanhe o console em tempo real e recupere versões anteriores quando quiser.</p>
+          <div class="stats">
+            <div class="stat"><span class="tiny">Builds salvos</span><strong id="statTotal">0</strong></div>
+            <div class="stat"><span class="tiny">Android</span><strong id="statAndroid">0</strong></div>
+            <div class="stat"><span class="tiny">iOS/Xcode</span><strong id="statIos">0</strong></div>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="btnRefreshBuilds" class="ghost">Atualizar biblioteca</button>
+          <button id="btnClear" class="secondary">Limpar log</button>
+          <button id="btnCancel" class="danger" disabled>Cancelar</button>
+          <button id="btnLogout" class="secondary">Sair</button>
+        </div>
+      </section>
+
+      <section class="status-shell">
+        <div class="status-main">
+          <div class="status-orb" id="statusOrb">⚡</div>
+          <div>
+            <strong id="statusText">Pronto para um novo build.</strong>
+            <div class="hint" id="statusHint">Escolha Android, iOS ou ambos e dispare a geração.</div>
+            <div class="pill-row" style="margin-top:10px">
+              <span class="mini-chip" id="currentBuildBadge">Nenhum build em andamento</span>
+            </div>
+          </div>
+        </div>
+        <div class="build-actions">
+          <span id="timer" class="timer">00:00</span>
+          <button id="btnCancelBottom" class="danger" disabled>Cancelar build</button>
+        </div>
+      </section>
+
+      <section class="console-shell">
+        <div class="console-head">
+          <strong id="logTitle">Console de build</strong>
+          <span class="tiny" style="color:#ffedd5">Saída em tempo real</span>
+        </div>
+        <pre id="log" class="console-body">Pronto para gerar seu aplicativo. Preencha os dados, escolha os destinos e clique em GERAR APLICATIVO.</pre>
+      </section>
+
+      <div class="grid-bottom">
+        <section id="downloadPanel" class="downloads-shell" style="display:none">
+          <div class="download-head">
+            <div>
+              <strong id="downloadTitle">Build concluído</strong>
+              <p id="downloadText" class="hint" style="margin:6px 0 0">Baixe os arquivos gerados abaixo.</p>
+            </div>
+            <span class="artifact-chip" id="downloadBuildId">-</span>
+          </div>
+          <div id="latestArtifacts" class="downloads"></div>
+        </section>
+
+        <section class="manifest-card">
+          <b>Dados encontrados</b>
+          <p id="manifestSummary" class="hint">Clique em “Buscar dados automáticos” para preencher os campos do projeto.</p>
+          <hr style="border-color:rgba(148,163,184,.14);border-width:1px 0 0;margin:14px 0">
+          <b>Status do sistema</b>
+          <p class="hint"><span class="ok">●</span> Pipeline Android sem prompts interativos<br><span class="ok">●</span> Biblioteca de builds persistente<br><span class="warn">●</span> Projeto iOS precisa ser finalizado no Mac/Xcode</p>
+        </section>
+      </div>
+
+      <section class="library-shell">
+        <div class="library-title">
+          <div>
+            <strong>Apps gerados</strong>
+            <p class="hint" style="margin:6px 0 0">Seu catálogo de builds salvos, com re-download de APK, AAB, log e projeto Xcode.</p>
+          </div>
+          <span class="artifact-chip" id="libraryCount">0 itens</span>
+        </div>
+        <div id="buildLibrary" class="library-grid">
+          <div class="empty-state">Nenhum build salvo ainda.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const socket = io();
+    let token = localStorage.getItem('pwa_token') || '';
+    let buildRunning = false;
+    let startTime = 0;
+    let timerInt = null;
+    let lastBuildId = '';
+    const $ = id => document.getElementById(id);
+
+    function showLogin(msg = '') {
+      $('app').style.display = 'none';
+      $('login').style.display = 'grid';
+      $('loginError').textContent = msg;
+    }
+
+    function showApp() {
+      $('login').style.display = 'none';
+      $('app').style.display = 'grid';
+      $('loginError').textContent = '';
+    }
+
+    function clearSession(msg = 'Sessão expirada. Faça login novamente.') {
+      token = '';
+      localStorage.removeItem('pwa_token');
+      buildRunning = false;
+      clearInterval(timerInt);
+      setBuildButtons(false);
+      showLogin(msg);
+    }
+
+    function authHeaders() {
+      return token ? { 'x-panel-token': token } : {};
+    }
+
+    async function apiFetch(url, options = {}) {
+      const opts = { ...options, headers: { ...(options.headers || {}), ...authHeaders() } };
+      const response = await fetch(url, opts);
+      if (response.status === 401) {
+        let msg = 'Sessão expirada. Faça login novamente.';
+        try {
+          const payload = await response.clone().json();
+          if (payload && payload.msg) msg = payload.msg;
+        } catch (_) {}
+        clearSession(msg);
+        throw new Error(msg);
+      }
+      return response;
+    }
+
+    function setBuildButtons(running) {
+      $('btnCancel').disabled = !running;
+      $('btnCancelBottom').disabled = !running;
+      $('btnBuild').disabled = running;
+      buildRunning = running;
+    }
+
+    function updateTargetCards() {
+      $('androidTargetCard').classList.toggle('active', $('buildAndroid').checked);
+      $('iosTargetCard').classList.toggle('active', $('buildIos').checked);
+      $('androidArtifact').disabled = !$('buildAndroid').checked;
+    }
+
+    function setStatus(kind, title, hint, buildId = '') {
+      $('statusText').textContent = title;
+      $('statusHint').textContent = hint;
+      $('currentBuildBadge').textContent = buildId ? `Build ${buildId}` : 'Nenhum build em andamento';
+      const orb = $('statusOrb');
+      if (kind === 'running') orb.innerHTML = '<div class="spinner"></div>';
+      else if (kind === 'success') orb.textContent = '✅';
+      else if (kind === 'error') orb.textContent = '⚠️';
+      else orb.textContent = '⚡';
+    }
+
+    function tick() {
+      const sec = Math.floor((Date.now() - startTime) / 1000);
+      $('timer').textContent = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+    }
+
+    function appendLog(msg) {
+      const log = $('log');
+      if (log.textContent.startsWith('Pronto para gerar')) log.textContent = '';
+      const clean = String(msg).replace(/(storepass|keypass|signingKeyPassword|signingKeyAliasPassword)\s+[^\s]+/gi, '$1 ******');
+      log.textContent += clean.endsWith('\n') ? clean : clean + '\n';
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatDate(value) {
+      if (!value) return '-';
+      try {
+        return new Date(value).toLocaleString('pt-BR');
+      } catch (_) {
+        return value;
+      }
+    }
+
+    function formatSize(bytes) {
+      const value = Number(bytes || 0);
+      if (!value) return '-';
+      if (value < 1024) return `${value} B`;
+      if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+      if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+      return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+
+    function statusBadgeClass(status) {
+      return status === 'success' ? 'status-success'
+        : status === 'running' ? 'status-running'
+        : status === 'cancelled' ? 'status-cancelled'
+        : 'status-error';
+    }
+
+    function statusLabel(status) {
+      return status === 'success' ? 'Concluído'
+        : status === 'running' ? 'Rodando'
+        : status === 'cancelled' ? 'Cancelado'
+        : 'Erro';
+    }
+
+    function renderArtifactButtons(artifacts) {
+      if (!artifacts || !artifacts.length) return '<span class="tiny">Sem artefatos disponíveis.</span>';
+      return artifacts.map(item => {
+        const klass = item.platform === 'ios' ? 'blue' : item.key === 'log' ? 'orange' : item.type === 'apk' ? 'secondary' : '';
+        return `<button class="${klass}" data-download="${escapeHtml(item.downloadUrl)}">${escapeHtml(item.label)} <span class="tiny">(${escapeHtml(formatSize(item.size))})</span></button>`;
+      }).join('');
+    }
+
+    function bindDownloadButtons(scope = document) {
+      scope.querySelectorAll('[data-download]').forEach(btn => {
+        btn.onclick = () => {
+          const href = btn.getAttribute('data-download');
+          if (!href) return;
+          window.open(href, '_blank');
+        };
+      });
+    }
+
+    function renderLatestArtifacts(build) {
+      const artifacts = build && Array.isArray(build.artifacts) ? build.artifacts : [];
+      $('downloadPanel').style.display = artifacts.length ? 'grid' : 'none';
+      $('downloadTitle').textContent = build && build.status === 'success' ? 'Build concluído' : 'Arquivos disponíveis';
+      $('downloadText').textContent = build && build.status === 'success'
+        ? 'Baixe os artefatos gerados agora ou recupere mais versões na biblioteca abaixo.'
+        : 'Os artefatos disponíveis deste build podem ser baixados novamente.';
+      $('downloadBuildId').textContent = build && build.id ? build.id : '-';
+      $('latestArtifacts').innerHTML = renderArtifactButtons(artifacts);
+      bindDownloadButtons($('latestArtifacts'));
+    }
+
+    function renderBuildLibrary(items) {
+      $('libraryCount').textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+      $('statTotal').textContent = String(items.length);
+      $('statAndroid').textContent = String(items.filter(item => item.targets && item.targets.android).length);
+      $('statIos').textContent = String(items.filter(item => item.targets && item.targets.ios).length);
+      const library = $('buildLibrary');
+      if (!items.length) {
+        library.innerHTML = '<div class="empty-state">Nenhum build salvo ainda. O primeiro já vai aparecer aqui com APK, AAB, log e projeto iOS quando disponível.</div>';
+        return;
+      }
+      library.innerHTML = items.map(item => {
+        const targetChips = [];
+        if (item.targets && item.targets.android) targetChips.push(`<span class="target-chip">Android ${escapeHtml(item.targets.androidMode || 'both').toUpperCase()}</span>`);
+        if (item.targets && item.targets.ios) targetChips.push('<span class="target-chip">iOS / Xcode</span>');
+        const description = item.errorMessage ? `<div class="tiny" style="color:#fca5a5">${escapeHtml(item.errorMessage)}</div>` : '';
+        return `
+          <article class="build-card">
+            <div class="build-head">
+              <div>
+                <div class="build-name">${escapeHtml(item.appName || 'App sem nome')}</div>
+                <div class="tiny">${escapeHtml(item.packageId || '')}</div>
+              </div>
+              <span class="status-badge ${statusBadgeClass(item.status)}">${statusLabel(item.status)}</span>
+            </div>
+            <div class="card-meta">
+              <div>${escapeHtml(item.host || '')}</div>
+              <div>Criado em ${escapeHtml(formatDate(item.createdAt))}</div>
+            </div>
+            <div class="chip-row">${targetChips.join('')}</div>
+            ${description}
+            <div class="artifact-row">${renderArtifactButtons(item.artifacts || [])}</div>
+          </article>
+        `;
+      }).join('');
+      bindDownloadButtons(library);
+    }
+
+    async function loadBuilds() {
+      if (!token) return;
+      try {
+        const response = await apiFetch('/builds');
+        const payload = await response.json();
+        renderBuildLibrary(payload.items || []);
+      } catch (error) {
+        appendLog(`⚠️ Não foi possível atualizar a biblioteca: ${error.message}`);
+      }
+    }
+
+    async function validateSession() {
+      if (!token) {
+        showLogin();
+        return;
+      }
+      try {
+        const response = await apiFetch('/session');
+        const payload = await response.json().catch(() => ({}));
+        if (payload.success) {
+          showApp();
+          await loadBuilds();
+        } else {
+          clearSession();
+        }
+      } catch (error) {
+        if (token) $('loginError').textContent = error.message || 'Sessão inválida.';
+      }
+    }
+
+    $('btnLogin').onclick = async () => {
+      $('loginError').textContent = '';
+      try {
+        const response = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: $('loginUser').value, password: $('loginPass').value })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!payload.success) throw new Error(payload.msg || 'Falha no login');
+        token = payload.token;
+        localStorage.setItem('pwa_token', token);
+        showApp();
+        await loadBuilds();
+      } catch (error) {
+        $('loginError').textContent = error.message || 'Erro de conexão.';
+      }
+    };
+
+    $('btnLogout').onclick = () => clearSession('');
+    $('btnRefreshBuilds').onclick = () => loadBuilds();
+    $('btnClear').onclick = () => { $('log').textContent = ''; };
+
+    async function cancelBuild() {
+      if (!buildRunning) return;
+      try {
+        await apiFetch('/cancel-build', { method: 'POST' });
+      } catch (_) {}
+    }
+
+    $('btnCancel').onclick = cancelBuild;
+    $('btnCancelBottom').onclick = cancelBuild;
+
+    function setField(id, value) {
+      if (value !== undefined && value !== null && String(value).trim() !== '') $(id).value = value;
+    }
+
+    function setSelect(id, value) {
+      if (value && [...$(id).options].some(option => option.value === value)) $(id).value = value;
+    }
+
+    function colorOrDefault(value, fallback) {
+      return /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : fallback;
+    }
+
+    function addScreenshot(value = '') {
+      const div = document.createElement('div');
+      div.className = 'screens-row';
+      div.innerHTML = `<input name="screenshots" placeholder="https://exemplo.com/screenshot.png" value="${escapeHtml(value)}"><button type="button" class="danger btnRemoveScreenshot">×</button>`;
+      div.querySelector('button').onclick = () => div.remove();
+      $('screenshotsContainer').appendChild(div);
+    }
+
+    $('btnAddScreenshot').onclick = () => addScreenshot();
+    document.querySelectorAll('.btnRemoveScreenshot').forEach(button => {
+      button.onclick = () => button.parentElement.remove();
+    });
+
+    $('buildAndroid').addEventListener('change', updateTargetCards);
+    $('buildIos').addEventListener('change', updateTargetCards);
+
+    $('btnFetch').onclick = async () => {
+      const url = $('hostInput').value.trim();
+      if (!url) {
+        alert('Informe a URL.');
+        return;
+      }
+      $('btnFetch').disabled = true;
+      $('btnFetch').textContent = 'Buscando...';
+      appendLog(`> Buscando manifest de ${url}`);
+      try {
+        const response = await apiFetch('/fetch-manifest?url=' + encodeURIComponent(url));
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || 'Falha ao buscar dados.');
+        setField('appName', data.appName);
+        setField('shortName', (data.shortName || data.appName || '').substring(0, 12));
+        setField('packageId', data.packageId);
+        setField('startUrl', data.startUrl || '/');
+        setField('description', data.description);
+        $('themeColor').value = colorOrDefault(data.themeColor, $('themeColor').value);
+        $('backgroundColor').value = colorOrDefault(data.backgroundColor, $('backgroundColor').value);
+        setSelect('displayMode', data.display);
+        setSelect('orientation', data.orientation);
+        setField('iarc', data.iarc_rating_id);
+        if (data.iconUrl) {
+          $('iconUrl').value = data.iconUrl;
+          $('iconPreview').src = data.iconUrl;
+          $('iconPreview').style.display = 'block';
+        }
+        if (data.screenshots && data.screenshots.length) {
+          $('screenshotsContainer').innerHTML = '';
+          data.screenshots.slice(0, 8).forEach(addScreenshot);
+        }
+        $('manifestSummary').innerHTML = `<span class="ok">●</span> Manifest: ${escapeHtml(data.manifestUrl || 'detectado')}<br><span class="ok">●</span> Nome: ${escapeHtml(data.appName || '-')}<br><span class="ok">●</span> Pacote sugerido: ${escapeHtml(data.packageId || '-')}<br><span class="ok">●</span> Ícone: ${data.iconUrl ? 'encontrado' : 'não encontrado'}`;
+        appendLog('> Dados carregados e campos preenchidos.');
+        appendLog('> Manifest usado: ' + (data.manifestUrl || 'não informado'));
+      } catch (error) {
+        appendLog('❌ Erro ao buscar manifest: ' + error.message);
+        if (token) alert('Erro ao buscar manifest: ' + error.message);
+      } finally {
+        $('btnFetch').disabled = false;
+        $('btnFetch').textContent = 'Buscar dados automáticos';
+      }
+    };
+
+    $('buildForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!$('buildAndroid').checked && !$('buildIos').checked) {
+        alert('Selecione pelo menos um destino: Android e/ou iOS/Xcode.');
+        return;
+      }
+      setBuildButtons(true);
+      startTime = Date.now();
+      tick();
+      clearInterval(timerInt);
+      timerInt = setInterval(tick, 1000);
+      setStatus('running', 'Compilando pacote...', 'O pipeline está em andamento e o console continua abaixo.', '');
+      $('logTitle').textContent = 'Console de build em execução';
+      $('log').textContent = '';
+      $('downloadPanel').style.display = 'none';
+      const formData = new FormData(event.target);
+      formData.set('buildAndroid', $('buildAndroid').checked ? '1' : '0');
+      formData.set('buildIos', $('buildIos').checked ? '1' : '0');
+      formData.set('androidArtifact', $('androidArtifact').value);
+      try {
+        const response = await apiFetch('/generate', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!payload.success) throw new Error(payload.msg || 'Não foi possível iniciar.');
+        lastBuildId = payload.buildId || '';
+        setStatus('running', 'Build iniciado com sucesso.', 'A geração segue no servidor. Você pode acompanhar o log em tempo real.', lastBuildId);
+        appendLog('> Build iniciado no servidor...');
+      } catch (error) {
+        appendLog('❌ ' + error.message);
+        setBuildButtons(false);
+        clearInterval(timerInt);
+        setStatus('error', 'Falha ao iniciar o build.', error.message || 'Tente novamente.', '');
+      }
+    });
+
+    socket.on('log', appendLog);
+    socket.on('status', async status => {
+      clearInterval(timerInt);
+      setBuildButtons(false);
+      lastBuildId = status.buildId || lastBuildId;
+      $('logTitle').textContent = status.success ? 'Build concluído' : 'Build com erro';
+      appendLog('\n' + (status.msg || ''));
+      if (status.success) {
+        setStatus('success', 'Build concluído.', 'Os arquivos já podem ser baixados agora mesmo.', lastBuildId);
+      } else {
+        setStatus('error', 'Build encerrado com aviso.', status.msg || 'Veja o console para detalhes.', lastBuildId);
+      }
+      if (status.build) renderLatestArtifacts(status.build);
+      await loadBuilds();
+    });
+
+    updateTargetCards();
+    validateSession();
+  </script>
+</body>
+</html>
