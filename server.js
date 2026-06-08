@@ -957,6 +957,8 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       const validScreenshots = screenshots ? (Array.isArray(screenshots) ? screenshots : [screenshots]).filter(u => String(u).trim()) : [];
       if (validScreenshots.length) twa.screenshots = validScreenshots.map(u => ({ src: u, sizes: '1080x1920', type: 'image/png' }));
       fs.writeFileSync(twaPath, JSON.stringify(twa, null, 2));
+      const shared = require('@bubblewrap/cli/dist/lib/cmds/shared');
+      await shared.generateManifestChecksumFile(twaPath, buildDir);
     }
 
     fs.writeFileSync(path.join(buildDir, 'gradle.properties'), 'org.gradle.jvmargs=-Xmx1024m\norg.gradle.daemon=false\n');
