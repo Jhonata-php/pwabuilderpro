@@ -734,8 +734,30 @@ app.get('/fetch-manifest', requirePanelAuth, async (req, res) => {
     const candidates = [];
     let lastErr = '';
 
+    const u = new URL(url);
+    const basePath = u.pathname.endsWith('/') ? u.pathname : u.pathname.replace(/\/[^/]*$/, '/');
+    candidates.push(new URL('manifest.webmanifest', `${u.origin}${basePath}`).href);
+    candidates.push(new URL('manifest.json', `${u.origin}${basePath}`).href);
+    candidates.push(new URL('manifest.php', `${u.origin}${basePath}`).href);
+    candidates.push(new URL('/manifest.webmanifest', u.origin).href);
+    candidates.push(new URL('/manifest.json', u.origin).href);
+    candidates.push(new URL('/manifest.php', u.origin).href);
+
+    // Tenta primeiro os caminhos de manifest mais prováveis, porque costuma ser
+    // mais rápido e confiável do que depender do HTML da home.
+    for (const mUrl of [...new Set(candidates)]) {
+      try {
+        const mr = await httpGetSmart(mUrl, { timeout: 8000 });
+        if (mr.status >= 400) { lastErr = `HTTP ${mr.status} em ${mUrl}`; continue; }
+        const manifest = tryParseJsonLoose(mr.data);
+        if (manifest && (manifest.name || manifest.short_name || manifest.start_url || manifest.icons)) {
+          return res.json(parseManifest(manifest, mUrl));
+        }
+      } catch (e) { lastErr = e.message; }
+    }
+
     try {
-      const first = await httpGetSmart(url);
+      const first = await httpGetSmart(url, { timeout: 8000 });
       const contentType = String(first.headers['content-type'] || '');
       const pathName = new URL(url).pathname;
       if (first.status < 400 && (contentType.includes('application/manifest+json') || contentType.includes('application/json') || /manifest\.(webmanifest|json|php)$/i.test(pathName))) {
@@ -755,20 +777,12 @@ app.get('/fetch-manifest', requirePanelAuth, async (req, res) => {
       });
     } catch (e) {
       lastErr = e.message;
+      emitLog(`⚠️ Não foi possível ler o HTML para achar manifest: ${e.message}`);
     }
-
-    const u = new URL(url);
-    const basePath = u.pathname.endsWith('/') ? u.pathname : u.pathname.replace(/\/[^/]*$/, '/');
-    candidates.push(new URL('manifest.webmanifest', `${u.origin}${basePath}`).href);
-    candidates.push(new URL('manifest.json', `${u.origin}${basePath}`).href);
-    candidates.push(new URL('manifest.php', `${u.origin}${basePath}`).href);
-    candidates.push(new URL('/manifest.webmanifest', u.origin).href);
-    candidates.push(new URL('/manifest.json', u.origin).href);
-    candidates.push(new URL('/manifest.php', u.origin).href);
 
     for (const mUrl of [...new Set(candidates)]) {
       try {
-        const mr = await httpGetSmart(mUrl);
+        const mr = await httpGetSmart(mUrl, { timeout: 8000 });
         if (mr.status >= 400) { lastErr = `HTTP ${mr.status} em ${mUrl}`; continue; }
         const manifest = tryParseJsonLoose(mr.data);
         if (manifest && (manifest.name || manifest.short_name || manifest.start_url || manifest.icons)) {
