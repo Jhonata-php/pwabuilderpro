@@ -22,6 +22,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('crypto');
 const https = require('https');
+const { version: APP_VERSION } = require('./package.json');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,11 +48,19 @@ app.post('/login', (req, res) => {
   res.status(401).json({ success: false, msg: 'Usuário ou senha inválidos.' });
 });
 
+function getPanelToken(req) {
+  return req.headers['x-panel-token'] || req.query.token;
+}
+
 function requirePanelAuth(req, res, next) {
-  const token = req.headers['x-panel-token'] || req.query.token;
+  const token = getPanelToken(req);
   if (token && panelSessions.has(String(token))) return next();
   return res.status(401).json({ success: false, msg: 'Sessão expirada. Faça login novamente.' });
 }
+
+app.get('/session', requirePanelAuth, (req, res) => {
+  res.json({ success: true, version: APP_VERSION });
+});
 
 
 function cleanLogs(text) {
@@ -206,6 +215,16 @@ function ensureBubblewrapConfig(javaHome, androidSdkPath) {
   );
 }
 
+function resolveCommandPath(cmd) {
+  if (cmd !== 'bubblewrap') return cmd;
+  return findExistingPath([
+    path.join(process.cwd(), 'node_modules', '.bin', 'bubblewrap'),
+    path.join(__dirname, 'node_modules', '.bin', 'bubblewrap'),
+    '/app/node_modules/.bin/bubblewrap',
+    cmd
+  ]);
+}
+
 async function resolveWebManifestUrl(siteUrl) {
   const baseUrl = normalizeUrl(siteUrl);
   const u = new URL(baseUrl);
@@ -331,8 +350,9 @@ function writeLog(buildDir, msg) {
 function runCommand(cmd, args, opts = {}) {
   const { cwd, env = {}, buildDir, promptAnswers = {}, timeoutMs = 0 } = opts;
   return new Promise((resolve) => {
-    emitLog(`> ${cmd} ${args.join(' ')}`);
-    const child = spawn(cmd, args, {
+    const resolvedCmd = resolveCommandPath(cmd);
+    emitLog(`> ${resolvedCmd} ${args.join(' ')}`);
+    const child = spawn(resolvedCmd, args, {
       cwd,
       env: { ...process.env, ...env },
       shell: false,
@@ -347,8 +367,8 @@ function runCommand(cmd, args, opts = {}) {
     if (timeoutMs && timeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
         killedByTimeout = true;
-        writeLog(buildDir, `❌ Timeout após ${Math.round(timeoutMs/1000)}s executando: ${cmd} ${args.join(' ')}`);
-        emitLog(`❌ Timeout após ${Math.round(timeoutMs/1000)}s executando: ${cmd} ${args.join(' ')}`);
+        writeLog(buildDir, `❌ Timeout após ${Math.round(timeoutMs/1000)}s executando: ${resolvedCmd} ${args.join(' ')}`);
+        emitLog(`❌ Timeout após ${Math.round(timeoutMs/1000)}s executando: ${resolvedCmd} ${args.join(' ')}`);
         try { child.kill('SIGKILL'); } catch (_) {}
       }, timeoutMs);
     }
@@ -421,7 +441,7 @@ function runCommand(cmd, args, opts = {}) {
         resolve(124);
         return;
       }
-      if (code !== 0) { writeLog(buildDir, `❌ Processo finalizou com código ${code}: ${cmd}`); emitLog(`❌ Processo finalizou com código ${code}: ${cmd}`); }
+      if (code !== 0) { writeLog(buildDir, `❌ Processo finalizou com código ${code}: ${resolvedCmd}`); emitLog(`❌ Processo finalizou com código ${code}: ${resolvedCmd}`); }
       resolve(code);
     });
   });
@@ -597,12 +617,6 @@ async function generateBubblewrapProjectDirect({ buildDir, manifestUrl, promptAn
   twaManifest.startUrl = promptAnswers.urlPath || '/';
   twaManifest.display = promptAnswers.display || 'standalone';
   twaManifest.orientation = promptAnswers.orientation || 'portrait';
-  twaManifest.themeColor = promptAnswers.themeColor || '#000000';
-  twaManifest.navigationColor = promptAnswers.navColor || '#000000';
-  twaManifest.navigationColorDark = promptAnswers.navColor || '#000000';
-  twaManifest.navigationDividerColor = promptAnswers.navColor || '#000000';
-  twaManifest.navigationDividerColorDark = promptAnswers.navColor || '#000000';
-  twaManifest.backgroundColor = promptAnswers.backgroundColor || '#ffffff';
   twaManifest.enableNotifications = true;
   twaManifest.signingKey = { path: promptAnswers.keystorePath, alias: promptAnswers.keyAlias || 'app' };
   twaManifest.generatorApp = 'PWA Builder Pro';
@@ -616,6 +630,9 @@ async function generateBubblewrapProjectDirect({ buildDir, manifestUrl, promptAn
     throw new Error('Manifest não possui ícone válido. Informe uma URL de ícone PNG 512x512 no campo Icon URL.');
   }
 
+  // O Bubblewrap espera objetos de cor internos aqui; sobrescrever com string
+  // quebra o saveToFile() com "this.themeColor.hex is not a function".
+  // As cores finais continuam sendo aplicadas depois, no twa-manifest.json.
   const manifestFile = path.join(buildDir, 'twa-manifest.json');
   await twaManifest.saveToFile(manifestFile);
 
@@ -763,7 +780,7 @@ app.get('/fetch-manifest', requirePanelAuth, async (req, res) => {
   }
 });
 
-app.get('/download', (req, res) => {
+app.get('/download', requirePanelAuth, (req, res) => {
   const buildDir = path.join(__dirname, 'temp_build');
   const type = req.query.type;
   const logFile = path.join(buildDir, 'build.log');
