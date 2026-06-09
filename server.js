@@ -22,6 +22,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('crypto');
 const https = require('https');
+const { google } = require('googleapis');
 const APP_PACKAGE = require('./package.json');
 const { version: APP_VERSION } = APP_PACKAGE;
 
@@ -42,6 +43,7 @@ const GRADLE_PROPERTIES = [
 ].join('\n') + '\n';
 const BUILD_STORAGE_DIR = path.join(__dirname, 'builds');
 const PROJECTS_FILE = path.join(__dirname, 'data', 'projects.json');
+const SIGNING_STORAGE_DIR = path.join(__dirname, 'data', 'signing');
 const IOS_DEPLOYMENT_TARGET = '15.0';
 
 app.use(express.static(publicDir));
@@ -246,6 +248,67 @@ function saveProjectRecord(project) {
   return getProject(project.id);
 }
 
+function signingDirForProject(projectId) {
+  return path.join(SIGNING_STORAGE_DIR, projectId);
+}
+
+function signingMetadataPath(projectId) {
+  return path.join(signingDirForProject(projectId), 'keystore-info.json');
+}
+
+function readSigningMetadata(projectId) {
+  const metaPath = signingMetadataPath(projectId);
+  if (!fileExists(metaPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+async function ensureProjectSigningKey({ projectId, appName, env, buildDir }) {
+  const keyAlias = 'app';
+  const dir = signingDirForProject(projectId);
+  ensureDir(dir);
+
+  const meta = readSigningMetadata(projectId);
+  if (meta && fileExists(meta.path) && meta.alias && meta.storePassword) {
+    emitLog('> [ANDROID] Reutilizando keystore existente deste projeto para manter a mesma assinatura.');
+    return {
+      keyAlias: String(meta.alias),
+      storePassword: String(meta.storePassword),
+      keystorePath: String(meta.path),
+      reused: true
+    };
+  }
+
+  const storePassword = crypto.randomBytes(18).toString('base64url');
+  const keystorePath = path.join(dir, 'release-key.p12');
+  const dn = `CN=${appName}, OU=Apps, O=Need Solutions, L=Urania, ST=SP, C=BR`;
+  emitLog('> [ANDROID] Criando a primeira keystore persistente deste projeto.');
+  const keyCode = await runCommand('keytool', [
+    '-genkeypair', '-v', '-keystore', keystorePath, '-storetype', 'PKCS12',
+    '-storepass', storePassword, '-keypass', storePassword,
+    '-alias', keyAlias, '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000',
+    '-dname', dn
+  ], { cwd: buildDir, env, buildDir });
+  if (keyCode !== 0) throw new Error('Falha ao gerar a keystore persistente do projeto.');
+
+  const payload = {
+    path: keystorePath,
+    alias: keyAlias,
+    storePassword,
+    createdAt: new Date().toISOString()
+  };
+  fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
+  return {
+    keyAlias,
+    storePassword,
+    keystorePath,
+    reused: false
+  };
+}
+
 function readBuildMetadata(buildId) {
   const metaPath = buildMetadataPath(buildId);
   if (!fileExists(metaPath)) return null;
@@ -364,6 +427,19 @@ async function httpGetSmart(targetUrl, opts = {}) {
     headers: browserHeaders,
     httpsAgent: insecureHttpsAgent
   });
+}
+
+function normalizeMultilineText(value) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function clampText(value, max, fallback = '') {
+  const normalized = normalizeMultilineText(value);
+  if (!normalized) return fallback;
+  return normalized.length > max ? normalized.slice(0, max).trim() : normalized;
 }
 
 function tryParseJsonLoose(raw) {
@@ -915,6 +991,272 @@ async function generateIosProject({ buildDir, appName, packageId, siteUrl, iconU
   return zipDirectory(projectRoot, zipPath, buildDir);
 }
 
+function playPublisherEnabled() {
+  return ['1', 'true', 'on'].includes(String(process.env.GOOGLE_PLAY_AUTO_PUBLISH || '').toLowerCase());
+}
+
+function playLanguage() {
+  return String(process.env.GOOGLE_PLAY_DEFAULT_LANGUAGE || 'pt-BR').trim() || 'pt-BR';
+}
+
+function playTrack() {
+  return String(process.env.GOOGLE_PLAY_TRACK || 'internal').trim() || 'internal';
+}
+
+function buildPlayListingTexts({ appName, shortName, description, host, packageId, versionName, versionCode }) {
+  const title = clampText(appName || shortName || 'App', 50, 'App');
+  const shortDescription = clampText(
+    description || `${title} em formato mobile para Google Play e distribuição Android.`,
+    80,
+    `${title} em formato mobile para Google Play.`
+  );
+  const fullDescription = clampText(
+    description || `${title} transforma sua PWA em um app pronto para Android e distribuição em loja.\n\nAcesso: ${host || '-'}\nPacote: ${packageId || '-'}\nVersão: ${versionName || '-'} (${versionCode || '-'})`,
+    4000,
+    `${title} em formato app para Android.`
+  );
+  const releaseNotes = clampText(
+    `Versão ${versionName || '1.0.0'} (${versionCode || 1})\n- Build gerado automaticamente pelo painel\n- Atualização de artefatos e configuração da PWA\n- Ajustes visuais e operacionais para publicação`,
+    500,
+    `Versão ${versionName || '1.0.0'} (${versionCode || 1})`
+  );
+  return { title, shortDescription, fullDescription, releaseNotes };
+}
+
+async function downloadBinaryFile(url, outFile) {
+  const response = await httpGetSmart(url, { responseType: 'arraybuffer', timeout: 20000 });
+  if (response.status >= 400) throw new Error(`Falha ao baixar asset remoto: HTTP ${response.status} (${url})`);
+  ensureDir(path.dirname(outFile));
+  fs.writeFileSync(outFile, Buffer.from(response.data));
+  return outFile;
+}
+
+async function preparePlayStoreAssets({
+  buildDir,
+  appName,
+  shortName,
+  description,
+  host,
+  packageId,
+  versionName,
+  versionCode,
+  iconUrl,
+  screenshots
+}) {
+  const baseDir = path.join(buildDir, 'play-store');
+  const listingDir = path.join(baseDir, 'listing');
+  const imagesDir = path.join(baseDir, 'images');
+  ensureDir(listingDir);
+  ensureDir(imagesDir);
+
+  const texts = buildPlayListingTexts({
+    appName,
+    shortName,
+    description,
+    host,
+    packageId,
+    versionName,
+    versionCode
+  });
+
+  fs.writeFileSync(path.join(listingDir, 'title.txt'), texts.title + '\n');
+  fs.writeFileSync(path.join(listingDir, 'short-description.txt'), texts.shortDescription + '\n');
+  fs.writeFileSync(path.join(listingDir, 'full-description.txt'), texts.fullDescription + '\n');
+  fs.writeFileSync(path.join(listingDir, 'release-notes.txt'), texts.releaseNotes + '\n');
+  fs.writeFileSync(path.join(baseDir, 'play-store-copy.txt'), [
+    `TITLE`,
+    texts.title,
+    '',
+    `SHORT DESCRIPTION`,
+    texts.shortDescription,
+    '',
+    `FULL DESCRIPTION`,
+    texts.fullDescription,
+    '',
+    `RELEASE NOTES`,
+    texts.releaseNotes
+  ].join('\n') + '\n');
+
+  const downloaded = {
+    icon: '',
+    featureGraphic: '',
+    phoneScreenshots: []
+  };
+
+  if (iconUrl) {
+    try {
+      const ext = path.extname(new URL(iconUrl).pathname) || '.png';
+      downloaded.icon = await downloadBinaryFile(iconUrl, path.join(imagesDir, `icon${ext}`));
+    } catch (error) {
+      emitLog(`⚠️ Não foi possível baixar o ícone da Play Store: ${error.message}`);
+    }
+  }
+
+  const validScreenshots = Array.isArray(screenshots) ? screenshots.filter(Boolean) : [];
+  for (let index = 0; index < validScreenshots.length; index += 1) {
+    const screenshotUrl = String(validScreenshots[index] || '').trim();
+    if (!screenshotUrl) continue;
+    try {
+      const ext = path.extname(new URL(screenshotUrl).pathname) || '.png';
+      const file = await downloadBinaryFile(screenshotUrl, path.join(imagesDir, `phone-screenshot-${String(index + 1).padStart(2, '0')}${ext}`));
+      downloaded.phoneScreenshots.push(file);
+    } catch (error) {
+      emitLog(`⚠️ Não foi possível baixar screenshot ${index + 1}: ${error.message}`);
+    }
+  }
+
+  const manifest = {
+    packageId,
+    language: playLanguage(),
+    track: playTrack(),
+    generatedAt: new Date().toISOString(),
+    texts,
+    images: {
+      icon: downloaded.icon ? path.basename(downloaded.icon) : '',
+      phoneScreenshots: downloaded.phoneScreenshots.map(file => path.basename(file))
+    }
+  };
+  fs.writeFileSync(path.join(baseDir, 'play-store-manifest.json'), JSON.stringify(manifest, null, 2));
+  fs.writeFileSync(path.join(baseDir, 'README.txt'), [
+    'Arquivos gerados para publicação na Google Play.',
+    '',
+    '- title.txt: título da ficha',
+    '- short-description.txt: descrição curta',
+    '- full-description.txt: descrição completa',
+    '- release-notes.txt: notas da versão',
+    '- images/icon.png: ícone da Play se o download do ícone original deu certo',
+    '- images/phone-screenshot-*.png: screenshots reaproveitadas do projeto',
+    '',
+    'Observação: o AAB não preenche sozinho a ficha da loja; estes arquivos existem justamente para o upload manual ou pela API.'
+  ].join('\n') + '\n');
+
+  const zipPath = path.join(buildDir, 'dist', 'google-play-assets.zip');
+  await zipDirectory(baseDir, zipPath, buildDir);
+  return {
+    zipPath,
+    baseDir,
+    listingDir,
+    images: downloaded,
+    texts
+  };
+}
+
+function parseGooglePlayCredentials() {
+  const raw = String(process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON || '').trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function uploadPlayImage(publisher, { packageId, editId, language, imageType, filePath }) {
+  if (!filePath || !fileExists(filePath)) return;
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+  await publisher.edits.images.upload({
+    packageName: packageId,
+    editId,
+    language,
+    imageType,
+    media: {
+      mimeType,
+      body: fs.createReadStream(filePath)
+    }
+  });
+}
+
+async function publishToGooglePlay({
+  packageId,
+  aabPath,
+  listing,
+  releaseNotes,
+  track
+}) {
+  const credentials = parseGooglePlayCredentials();
+  if (!credentials) throw new Error('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON não configurado.');
+
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/androidpublisher']
+  });
+  const publisher = google.androidpublisher({ version: 'v3', auth });
+  const language = playLanguage();
+
+  const insert = await publisher.edits.insert({ packageName: packageId });
+  const editId = insert.data.id;
+  if (!editId) throw new Error('Não foi possível abrir um edit na Google Play.');
+
+  await publisher.edits.bundles.upload({
+    packageName: packageId,
+    editId,
+    media: {
+      mimeType: 'application/octet-stream',
+      body: fs.createReadStream(aabPath)
+    }
+  });
+
+  await publisher.edits.listings.update({
+    packageName: packageId,
+    editId,
+    language,
+    requestBody: {
+      title: listing.title,
+      shortDescription: listing.shortDescription,
+      fullDescription: listing.fullDescription
+    }
+  });
+
+  await publisher.edits.images.deleteall({ packageName: packageId, editId, language, imageType: 'phoneScreenshots' });
+  await publisher.edits.images.deleteall({ packageName: packageId, editId, language, imageType: 'icon' }).catch(() => {});
+
+  if (releaseNotes.iconPath) {
+    await uploadPlayImage(publisher, {
+      packageId,
+      editId,
+      language,
+      imageType: 'icon',
+      filePath: releaseNotes.iconPath
+    });
+  }
+
+  for (const screenshotPath of releaseNotes.phoneScreenshots || []) {
+    await uploadPlayImage(publisher, {
+      packageId,
+      editId,
+      language,
+      imageType: 'phoneScreenshots',
+      filePath: screenshotPath
+    });
+  }
+
+  const bundleList = await publisher.edits.bundles.list({ packageName: packageId, editId });
+  const latestVersionCode = (bundleList.data.bundles || []).map(item => Number(item.versionCode || 0)).sort((a, b) => b - a)[0];
+  if (!latestVersionCode) throw new Error('A Google Play não retornou versionCode do bundle enviado.');
+
+  await publisher.edits.tracks.update({
+    packageName: packageId,
+    editId,
+    track,
+    requestBody: {
+      track,
+      releases: [{
+        name: `Release ${listing.title}`,
+        status: track === 'production' ? 'completed' : 'draft',
+        versionCodes: [String(latestVersionCode)],
+        releaseNotes: [{
+          language,
+          text: releaseNotes.text
+        }]
+      }]
+    }
+  });
+
+  await publisher.edits.commit({ packageName: packageId, editId });
+  return { editId, versionCode: latestVersionCode, track, language };
+}
+
 function tclEscape(value) {
   return String(value ?? '')
     .replace(/\\/g, '\\\\')
@@ -1448,16 +1790,11 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
     if (wantsAndroid) {
       const javaHome = getJavaHome();
       const androidSdkPath = getAndroidSdkPath();
-      const keyAlias = 'app';
-      const storePassword = crypto.randomBytes(18).toString('base64url');
-      const keystorePath = path.join(buildDir, 'release-key.p12');
-      const env = {
+      const envBase = {
         JAVA_HOME: javaHome,
         ANDROID_HOME: androidSdkPath,
         ANDROID_SDK_ROOT: androidSdkPath,
         PATH: `${process.env.PATH}:${androidSdkPath}/cmdline-tools/latest/bin:${androidSdkPath}/platform-tools:${androidSdkPath}/build-tools/34.0.0`,
-        BUBBLEWRAP_KEYSTORE_PASSWORD: storePassword,
-        BUBBLEWRAP_KEY_PASSWORD: storePassword,
         JAVA_TOOL_OPTIONS: '-Xmx1024m',
         _JAVA_OPTIONS: '-Xmx1024m',
         GRADLE_OPTS: '-Xmx1024m -Dorg.gradle.daemon=false'
@@ -1480,16 +1817,22 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       fs.writeFileSync(path.join(gradleDir, 'gradle.properties'), GRADLE_PROPERTIES);
 
       emitLog('> Configurando Bubblewrap com JDK/Android SDK fixos...');
-      await runCommand('bubblewrap', ['updateConfig', '--jdkPath', javaHome, '--androidSdkPath', androidSdkPath], { cwd: buildDir, env, buildDir, promptAnswers: {} });
-
-      const dn = `CN=${safeAppName}, OU=Apps, O=Need Solutions, L=Urania, ST=SP, C=BR`;
-      const keyCode = await runCommand('keytool', [
-        '-genkeypair', '-v', '-keystore', keystorePath, '-storetype', 'PKCS12',
-        '-storepass', storePassword, '-keypass', storePassword,
-        '-alias', keyAlias, '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000',
-        '-dname', dn
-      ], { cwd: buildDir, env, buildDir });
-      if (keyCode !== 0) throw new Error('Falha ao gerar keystore automaticamente.');
+      await runCommand('bubblewrap', ['updateConfig', '--jdkPath', javaHome, '--androidSdkPath', androidSdkPath], { cwd: buildDir, env: envBase, buildDir, promptAnswers: {} });
+      const signing = await ensureProjectSigningKey({
+        projectId: currentProject.id,
+        appName: safeAppName,
+        env: envBase,
+        buildDir
+      });
+      const keyAlias = signing.keyAlias;
+      const storePassword = signing.storePassword;
+      const keystorePath = signing.keystorePath;
+      const env = {
+        ...envBase,
+        BUBBLEWRAP_KEYSTORE_PASSWORD: storePassword,
+        BUBBLEWRAP_KEY_PASSWORD: storePassword
+      };
+      let aabFileForPlay = '';
       fs.writeFileSync(path.join(buildDir, 'keystore-info.json'), JSON.stringify({ path: keystorePath, alias: keyAlias, storePassword }, null, 2));
 
       emitLog('> [ANDROID] Inicializando projeto Android/TWA pelo Web Manifest...');
@@ -1587,6 +1930,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       if (androidMode === 'both' || androidMode === 'aab') {
         const aabFile = findBuiltFile(buildDir, 'aab');
         if (!aabFile) throw new Error('O build Android terminou sem gerar o arquivo AAB.');
+        aabFileForPlay = aabFile;
         const aabArtifact = archiveBuildArtifact(buildId, aabFile, `${slugify(safeAppName)}-${buildId}.aab`, {
           key: 'aab',
           label: 'Android App Bundle',
@@ -1605,6 +1949,64 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
           type: 'apk'
         });
         if (apkArtifact) artifacts.push(apkArtifact);
+      }
+
+      const playAssets = await preparePlayStoreAssets({
+        buildDir,
+        appName: safeAppName,
+        shortName: finalShortName,
+        description,
+        host: siteUrl,
+        packageId: finalPackageId,
+        versionName: vName,
+        versionCode: vCode,
+        iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : ''),
+        screenshots: normalizedScreenshots
+      });
+      const playAssetsArtifact = archiveBuildArtifact(buildId, playAssets.zipPath, `${slugify(safeAppName)}-${buildId}-google-play-assets.zip`, {
+        key: 'play-assets',
+        label: 'Assets da Google Play',
+        platform: 'android',
+        type: 'zip'
+      });
+      if (playAssetsArtifact) artifacts.push(playAssetsArtifact);
+      const playCopyArtifact = archiveBuildArtifact(buildId, path.join(playAssets.baseDir, 'play-store-copy.txt'), `${slugify(safeAppName)}-${buildId}-play-store-copy.txt`, {
+        key: 'play-copy',
+        label: 'Texto da ficha Google Play',
+        platform: 'android',
+        type: 'txt'
+      });
+      if (playCopyArtifact) artifacts.push(playCopyArtifact);
+
+      if (playPublisherEnabled()) {
+        if (!aabFileForPlay) {
+          emitLog('⚠️ Publicação automática na Google Play ignorada: o modo Android atual não gerou AAB.');
+        } else {
+          emitLog('> [PLAY] Enviando AAB e store listing para a Google Play API...');
+          const publishResult = await publishToGooglePlay({
+            packageId: finalPackageId,
+            aabPath: aabFileForPlay,
+            listing: playAssets.texts,
+            releaseNotes: {
+              text: playAssets.texts.releaseNotes,
+              iconPath: playAssets.images.icon,
+              phoneScreenshots: playAssets.images.phoneScreenshots
+            },
+            track: playTrack()
+          });
+          const publishSummaryPath = path.join(buildDir, 'dist', 'google-play-publish.json');
+          fs.writeFileSync(publishSummaryPath, JSON.stringify(publishResult, null, 2));
+          const publishArtifact = archiveBuildArtifact(buildId, publishSummaryPath, `${slugify(safeAppName)}-${buildId}-google-play-publish.json`, {
+            key: 'play-publish',
+            label: 'Resumo do publish Google Play',
+            platform: 'android',
+            type: 'json'
+          });
+          if (publishArtifact) artifacts.push(publishArtifact);
+          emitLog(`> [PLAY] Publicação concluída no track ${publishResult.track} com versionCode ${publishResult.versionCode}.`);
+        }
+      } else {
+        emitLog('> [PLAY] Assets da loja gerados. Publicação automática desativada (GOOGLE_PLAY_AUTO_PUBLISH != 1).');
       }
     }
 
