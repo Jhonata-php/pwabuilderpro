@@ -14,7 +14,7 @@ if (typeof globalThis.File === 'undefined') {
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -511,10 +511,81 @@ function readSigningMetadata(projectId) {
   }
 }
 
-async function ensureProjectSigningKey({ projectId, appName, env, buildDir }) {
+function keystoreStoreTypeForPath(filePath) {
+  const ext = path.extname(String(filePath || '')).toLowerCase();
+  if (ext === '.p12' || ext === '.pfx') return 'PKCS12';
+  return '';
+}
+
+function inspectKeystore({ keystorePath, storePassword, keyAlias }) {
+  const args = ['-list', '-v', '-keystore', keystorePath, '-storepass', storePassword, '-alias', keyAlias];
+  const storeType = keystoreStoreTypeForPath(keystorePath);
+  if (storeType) args.splice(4, 0, '-storetype', storeType);
+  const javaHome = getJavaHome();
+  const env = javaHome ? { ...process.env, JAVA_HOME: javaHome, PATH: `${process.env.PATH}:${javaHome}/bin` } : process.env;
+  const result = spawnSync('keytool', args, { encoding: 'utf8', env, maxBuffer: 1024 * 1024 * 4 });
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  if (result.status !== 0) {
+    const msg = output.trim() || 'Falha ao validar keystore.';
+    throw new Error(msg);
+  }
+  const match = output.match(/SHA1:\s*([A-F0-9:]{40,})/i);
+  return {
+    sha1: match ? String(match[1]).toUpperCase() : '',
+    output
+  };
+}
+
+async function persistUploadedSigningKey({ projectId, uploadedFilePath, originalName, keyAlias, storePassword, buildDir }) {
+  const dir = signingDirForProject(projectId);
+  ensureDir(dir);
+  const ext = path.extname(originalName || uploadedFilePath || '').toLowerCase() || '.jks';
+  const keystorePath = path.join(dir, `imported-signing-key${ext}`);
+  fs.copyFileSync(uploadedFilePath, keystorePath);
+  const payload = {
+    path: keystorePath,
+    alias: keyAlias,
+    storePassword,
+    createdAt: new Date().toISOString(),
+    source: 'uploaded',
+    originalName: originalName || path.basename(keystorePath)
+  };
+  const inspected = inspectKeystore({ keystorePath, storePassword, keyAlias });
+  const sha1 = inspected.sha1;
+  if (sha1) payload.sha1 = sha1;
+  fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+async function ensureProjectSigningKey({ projectId, appName, env, buildDir, uploadedSigningFile, requestedAlias = '', requestedPassword = '' }) {
   const keyAlias = 'app';
   const dir = signingDirForProject(projectId);
   ensureDir(dir);
+
+  if (uploadedSigningFile) {
+    const alias = String(requestedAlias || '').trim();
+    const password = String(requestedPassword || '');
+    if (!alias || !password) {
+      throw new Error('Para importar uma keystore manual, informe alias e senha da keystore.');
+    }
+    emitLog('> [ANDROID] Importando keystore enviada manualmente para este projeto...');
+    const uploaded = await persistUploadedSigningKey({
+      projectId,
+      uploadedFilePath: uploadedSigningFile.path,
+      originalName: uploadedSigningFile.originalname,
+      keyAlias: alias,
+      storePassword: password,
+      buildDir
+    });
+    if (uploaded.sha1) emitLog(`> [ANDROID] SHA1 da keystore importada: ${uploaded.sha1}`);
+    return {
+      keyAlias: alias,
+      storePassword: password,
+      keystorePath: uploaded.path,
+      reused: false,
+      sha1: uploaded.sha1 || ''
+    };
+  }
 
   const meta = readSigningMetadata(projectId);
   if (meta && fileExists(meta.path) && meta.alias && meta.storePassword) {
@@ -523,7 +594,8 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir }) {
       keyAlias: String(meta.alias),
       storePassword: String(meta.storePassword),
       keystorePath: String(meta.path),
-      reused: true
+      reused: true,
+      sha1: String(meta.sha1 || '')
     };
   }
 
@@ -543,14 +615,19 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir }) {
     path: keystorePath,
     alias: keyAlias,
     storePassword,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    source: 'generated'
   };
+  const inspected = inspectKeystore({ keystorePath, storePassword, keyAlias });
+  const sha1 = inspected.sha1;
+  if (sha1) payload.sha1 = sha1;
   fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
   return {
     keyAlias,
     storePassword,
     keystorePath,
-    reused: false
+    reused: false,
+    sha1: payload.sha1 || ''
   };
 }
 
@@ -1913,7 +1990,8 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   const {
     appName, host, versionCode, versionName, shortName, packageId, themeColor,
     backgroundColor, navColor, navDarkColor, iconUrl, startUrl, description,
-    iarc, displayMode, orientation, screenshots, buildAndroid, buildIos, androidArtifact, projectId
+    iarc, displayMode, orientation, screenshots, buildAndroid, buildIos, androidArtifact, projectId,
+    signingAlias, signingPassword
   } = req.body;
 
   if (!host || !appName) return res.status(400).json({ success: false, msg: 'Faltam campos obrigatórios: host e appName.' });
@@ -2040,7 +2118,9 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
         screenshots: normalizedScreenshots,
         buildAndroid: wantsAndroid,
         buildIos: wantsIos,
-        androidArtifact: androidMode
+        androidArtifact: androidMode,
+        signingAlias: String(signingAlias || currentProject?.config?.signingAlias || '').trim(),
+        signingPassword: String(signingPassword || currentProject?.config?.signingPassword || '')
       }
     });
 
@@ -2081,11 +2161,15 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
         projectId: currentProject.id,
         appName: safeAppName,
         env: envBase,
-        buildDir
+        buildDir,
+        uploadedSigningFile: req.file || null,
+        requestedAlias: String(signingAlias || currentProject?.config?.signingAlias || '').trim(),
+        requestedPassword: String(signingPassword || currentProject?.config?.signingPassword || '')
       });
       const keyAlias = signing.keyAlias;
       const storePassword = signing.storePassword;
       const keystorePath = signing.keystorePath;
+      if (signing.sha1) emitLog(`> [ANDROID] Keystore em uso SHA1: ${signing.sha1}`);
       const env = {
         ...envBase,
         BUBBLEWRAP_KEYSTORE_PASSWORD: storePassword,
