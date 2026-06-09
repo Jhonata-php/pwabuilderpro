@@ -104,9 +104,19 @@
       flex-direction:column;
       gap:16px;
       padding-right:2px;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(255,255,255,.22) transparent;
     }
-    .sidebar-stack::-webkit-scrollbar,.main::-webkit-scrollbar,.console-body::-webkit-scrollbar,.project-builds::-webkit-scrollbar{width:10px}
-    .sidebar-stack::-webkit-scrollbar-thumb,.main::-webkit-scrollbar-thumb,.console-body::-webkit-scrollbar-thumb,.project-builds::-webkit-scrollbar-thumb{background:rgba(96,96,96,.55);border-radius:999px}
+    .sidebar-stack::-webkit-scrollbar,.main::-webkit-scrollbar,.console-body::-webkit-scrollbar,.project-builds::-webkit-scrollbar{width:10px;height:10px}
+    .sidebar-stack::-webkit-scrollbar-track,.main::-webkit-scrollbar-track,.console-body::-webkit-scrollbar-track,.project-builds::-webkit-scrollbar-track{
+      background:rgba(0,0,0,.22);
+      border-radius:999px;
+    }
+    .sidebar-stack::-webkit-scrollbar-thumb,.main::-webkit-scrollbar-thumb,.console-body::-webkit-scrollbar-thumb,.project-builds::-webkit-scrollbar-thumb{
+      background:rgba(96,96,96,.55);
+      border-radius:999px;
+      border:2px solid rgba(0,0,0,.22);
+    }
     .brand-card{
       padding:0 8px 20px;
       border-bottom:1px solid rgba(255,255,255,.07);
@@ -203,6 +213,11 @@
     }
     .sidebar-section-head strong{font-size:.96rem}
     .sidebar-section-head span{font-size:.76rem;color:#8791a4}
+    .sidebar-page{
+      display:grid;
+      gap:16px;
+    }
+    .sidebar-page.hidden{display:none}
     .sidebar-mini-card{
       padding:16px;
       border:1px solid rgba(255,255,255,.07);
@@ -220,6 +235,14 @@
     .sidebar-top,.project-list{margin-bottom:0}
     .sidebar-actions{display:flex;gap:10px;margin-top:14px}
     .project-list{display:grid;gap:10px}
+    .project-list-empty{
+      padding:18px;
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:20px;
+      background:rgba(255,255,255,.025);
+      color:var(--muted);
+      line-height:1.5;
+    }
     .project-card{
       padding:12px 14px;
       border-radius:20px;
@@ -462,46 +485,75 @@
           </button>
         </nav>
 
-        <div class="sidebar-mini-card sidebar-top">
-          <div class="sidebar-actions">
-            <button id="btnNewProject" class="primary" style="flex:1">Novo projeto</button>
-            <button id="btnRefreshProjects" class="ghost">Atualizar</button>
+        <div id="sidebarProjectsPage" class="sidebar-page">
+          <div class="sidebar-mini-card sidebar-top">
+            <strong style="display:block;margin-bottom:6px">Criar novo projeto</strong>
+            <p class="hint" style="margin:0">Abra um novo workspace e separe cada app do seu jeito.</p>
+            <div class="sidebar-actions">
+              <button id="btnNewProject" class="primary" style="flex:1">Novo projeto</button>
+              <button id="btnRefreshProjects" class="ghost">Atualizar</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="sidebar-section-head">
+              <strong>Projetos salvos</strong>
+              <span>Abra no hover</span>
+            </div>
+            <div id="projectList" class="project-list"></div>
+          </div>
+
+          <div class="sidebar-mini-card">
+            <strong style="display:block;margin-bottom:8px">Biblioteca persistente</strong>
+            <p class="hint" style="margin:0">Cada projeto guarda seus builds com re-download de APK, AAB, log e projeto Xcode.</p>
+            <div class="sidebar-footer-note">Passe o mouse nos cards para abrir mais r&aacute;pido.</div>
           </div>
         </div>
 
-        <div class="sidebar-section-head">
-          <strong>Projetos salvos</strong>
-          <span>Abra no hover</span>
+        <div id="sidebarBuildsPage" class="sidebar-page hidden">
+          <div class="sidebar-mini-card">
+            <strong style="display:block;margin-bottom:6px">Biblioteca de builds</strong>
+            <p class="hint" style="margin:0">Veja os pacotes gerados do projeto selecionado e baixe novamente quando quiser.</p>
+          </div>
+          <div class="sidebar-mini-card">
+            <strong style="display:block;margin-bottom:8px">Atalhos</strong>
+            <div class="sidebar-admin-actions">
+              <button id="btnBackToProjectsFromBuilds" class="ghost">Projetos</button>
+              <button id="btnRefreshBuildsSide" class="ghost">Atualizar builds</button>
+            </div>
+          </div>
         </div>
-        <div id="projectList" class="project-list"></div>
 
-        <div class="sidebar-mini-card">
-          <strong style="display:block;margin-bottom:8px">Biblioteca persistente</strong>
-          <p class="hint" style="margin:0">Cada projeto guarda seus builds com re-download de APK, AAB, log e projeto Xcode.</p>
-          <div class="sidebar-footer-note">Passe o mouse nos cards para abrir mais rápido.</div>
-        </div>
-
-        <div class="sidebar-footer">
+        <div id="sidebarAdminPage" class="sidebar-page hidden">
+          <div class="sidebar-user-footer-row">
+            <div class="sidebar-avatar" id="railUserBadge">A</div>
+            <div class="sidebar-user-text">
+              <span class="sidebar-user-name" id="sidebarUserName">Conta ativa</span>
+              <span class="sidebar-user-role" id="sidebarUserRole">PWA Builder Pro</span>
+            </div>
+          </div>
           <div class="sidebar-mini-card">
             <strong style="display:block;margin-bottom:8px">Administração</strong>
-            <p class="hint" style="margin:0 0 12px">Gerencie usuários, troque sua senha e confira o status do banco.</p>
+            <p class="hint" style="margin:0 0 12px">Gerencie usuários, troque sua senha e acompanhe o banco de dados.</p>
             <div class="sidebar-admin-actions">
               <button id="btnOpenProjects" class="ghost" style="flex:1">Projetos</button>
               <button id="btnOpenAdmin" class="blue" style="flex:1">Admin</button>
             </div>
           </div>
+          <div class="sidebar-mini-card">
+            <strong style="display:block;margin-bottom:8px">Sessão</strong>
+            <p class="hint" style="margin:0 0 12px">Saia do painel com segurança quando terminar.</p>
+            <button id="btnLogoutSide" class="secondary" style="width:100%">Sair do painel</button>
+          </div>
+        </div>
 
+        <div class="sidebar-footer">
           <div class="sidebar-user-footer-row">
-            <button class="sidebar-user-chip" type="button">
-              <div class="sidebar-avatar" id="railUserBadge">A</div>
-              <div class="sidebar-user-text">
-                <span class="sidebar-user-name" id="sidebarUserName">Conta ativa</span>
-                <span class="sidebar-user-role" id="sidebarUserRole">PWA Builder Pro</span>
-              </div>
-            </button>
-            <button id="btnLogoutSide" class="sidebar-user-more" type="button" aria-label="Sair">
-              <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
+            <div class="sidebar-avatar" id="railUserBadgeFooter">A</div>
+            <div class="sidebar-user-text">
+              <span class="sidebar-user-name" id="sidebarUserNameFooter">Conta ativa</span>
+              <span class="sidebar-user-role" id="sidebarUserRoleFooter">PWA Builder Pro</span>
+            </div>
           </div>
         </div>
       </div>
@@ -830,20 +882,30 @@
     }
     function syncSidebarUser() {
       const username = ((currentUser && currentUser.username) || 'Conta ativa').trim();
-      $('railUserBadge').textContent = (username || 'A').slice(0,1).toUpperCase();
+      const initial = (username || 'A').slice(0,1).toUpperCase();
+      $('railUserBadge').textContent = initial;
+      $('railUserBadgeFooter').textContent = initial;
       $('sidebarUserName').textContent = username;
+      $('sidebarUserNameFooter').textContent = username;
       $('sidebarUserRole').textContent = currentMode === 'admin' ? 'Administrador no painel' : 'PWA Builder Pro';
+      $('sidebarUserRoleFooter').textContent = currentMode === 'admin' ? 'Administrador no painel' : 'PWA Builder Pro';
     }
     function setMode(mode) {
-      currentMode = mode === 'admin' ? 'admin' : 'projects';
+      currentMode = mode === 'admin' ? 'admin' : mode === 'builds' ? 'builds' : 'projects';
       localStorage.setItem('pwa_mode', currentMode);
+      const showProjectWorkspace = (currentMode === 'projects' || currentMode === 'builds') && !!getSelectedProject();
       $('adminWorkspace').classList.toggle('hidden', currentMode !== 'admin');
-      $('projectWorkspace').classList.toggle('hidden', currentMode !== 'projects' || !getSelectedProject());
-      $('emptyProject').classList.toggle('hidden', currentMode !== 'projects' || !!getSelectedProject());
+      $('projectWorkspace').classList.toggle('hidden', !showProjectWorkspace);
+      $('emptyProject').classList.toggle('hidden', !(currentMode === 'projects' || currentMode === 'builds') || !!getSelectedProject());
+      $('sidebarProjectsPage').classList.toggle('hidden', currentMode !== 'projects');
+      $('sidebarBuildsPage').classList.toggle('hidden', currentMode !== 'builds');
+      $('sidebarAdminPage').classList.toggle('hidden', currentMode !== 'admin');
       $('btnOpenProjects').className = currentMode === 'projects' ? 'blue' : 'ghost';
       $('btnOpenAdmin').className = currentMode === 'admin' ? 'blue' : 'ghost';
       $('railProjects').classList.toggle('active', currentMode === 'projects');
       $('railAdmin').classList.toggle('active', currentMode === 'admin');
+      $('railBuilds').classList.toggle('active', currentMode === 'builds');
+      $('railSettings').classList.toggle('active', currentMode === 'admin');
       $('btnSaveProject').style.display = currentMode === 'projects' ? 'inline-flex' : 'none';
       syncSidebarUser();
     }
@@ -886,7 +948,7 @@
       $('statProjects').textContent = String(projects.length);
       const list = $('projectList');
       if (!projects.length) {
-        list.innerHTML = '<div class="empty">Nenhum projeto ainda. Crie o primeiro na sidebar.</div>';
+        list.innerHTML = '<div class="project-list-empty">Nenhum projeto ainda. Crie o primeiro pela área de novo projeto.</div>';
         return;
       }
       list.innerHTML = projects.map(project => `
@@ -958,16 +1020,18 @@
     }
     function updateHero(project) {
       const projectBuilds = builds.filter(item => item.projectId === project?.id);
-      $('heroTitle').textContent = currentMode === 'admin' ? 'Administração do Painel' : (project ? project.name : 'Selecione um projeto');
+      $('heroTitle').textContent = currentMode === 'admin' ? 'Administração do Painel' : currentMode === 'builds' ? 'Biblioteca de Builds' : (project ? project.name : 'Selecione um projeto');
       $('heroSubtitle').textContent = currentMode === 'admin'
         ? `Usuário logado: ${currentUser ? currentUser.username : '-'}`
+        : currentMode === 'builds'
+          ? (project ? `Artefatos e histórico de ${project.name}.` : 'Selecione um projeto para ver os builds salvos.')
         : (project ? (project.host || 'Configure a PWA e gere os artefatos desse projeto.') : 'Crie um projeto na sidebar para começar.');
       $('projectNameBar').textContent = project ? project.name : 'Nenhum projeto selecionado';
       $('projectMetaBar').textContent = project ? `${project.packageId || 'Sem packageId'} • ${project.buildCount || 0} builds` : 'Quando você entrar em um projeto, tudo aqui fica separado para ele.';
       $('statBuilds').textContent = String(projectBuilds.length);
       $('statStatus').textContent = statusLabel(project?.lastBuildStatus || '');
-      $('emptyProject').classList.toggle('hidden', currentMode !== 'projects' || !!project);
-      $('projectWorkspace').classList.toggle('hidden', currentMode !== 'projects' || !project);
+      $('emptyProject').classList.toggle('hidden', !((currentMode === 'projects' || currentMode === 'builds') && !project));
+      $('projectWorkspace').classList.toggle('hidden', !((currentMode === 'projects' || currentMode === 'builds') && !!project));
     }
     function renderUsers(items) {
       const box = $('userList');
@@ -1143,11 +1207,13 @@
     $('btnClearLog').onclick = () => { $('log').textContent = ''; };
     $('btnRefreshProjects').onclick = () => loadProjects().catch(error => appendLog(`⚠️ ${error.message}`));
     $('btnRefreshBuilds').onclick = () => loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`));
+    $('btnRefreshBuildsSide').onclick = () => loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`));
+    $('btnBackToProjectsFromBuilds').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
     $('btnOpenProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
     $('btnOpenAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
     $('railProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
     $('railAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
-    $('railBuilds').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`)); };
+    $('railBuilds').onclick = () => { setMode('builds'); updateHero(getSelectedProject()); loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`)); };
     $('railSettings').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); };
     $('btnCancel').onclick = async () => { if (buildRunning) await apiFetch('/cancel-build', { method:'POST' }); };
     $('btnSaveProject').onclick = async () => {
