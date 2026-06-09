@@ -8,21 +8,22 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
     :root{
-      --bg:#07111b;
-      --bg2:#0d1725;
-      --panel:#0c1522;
-      --panel2:#111d2e;
-      --card:#162235;
-      --card2:#1a2a41;
-      --line:rgba(148,163,184,.15);
-      --text:#eef6ff;
-      --muted:#95a6bf;
-      --green:#4ade80;
-      --cyan:#22d3ee;
-      --blue:#60a5fa;
+      --bg:#070707;
+      --bg2:#101010;
+      --panel:#151515;
+      --panel2:#1c1c1c;
+      --card:#1d1d1d;
+      --card2:#252525;
+      --line:rgba(255,255,255,.08);
+      --text:#f5f7fb;
+      --muted:#9399a8;
+      --green:#30d784;
+      --cyan:#37c9ff;
+      --blue:#3b82f6;
       --orange:#fb923c;
-      --red:#f87171;
-      --shadow:0 28px 60px rgba(2,6,23,.42);
+      --red:#ef4444;
+      --glow:rgba(239,68,68,.35);
+      --shadow:0 26px 80px rgba(0,0,0,.45);
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -31,9 +32,9 @@
       color:var(--text);
       font-family:"Space Grotesk",system-ui,sans-serif;
       background:
-        radial-gradient(circle at 0% 0%, rgba(34,211,238,.12), transparent 25%),
-        radial-gradient(circle at 100% 10%, rgba(74,222,128,.08), transparent 18%),
-        linear-gradient(145deg, #06111b, #0c1522 52%, #101827);
+        radial-gradient(circle at 0% 0%, rgba(239,68,68,.08), transparent 22%),
+        radial-gradient(circle at 100% 10%, rgba(55,201,255,.06), transparent 18%),
+        linear-gradient(145deg, #080808, #111111 55%, #161616);
       overflow:hidden;
     }
     button,input,textarea,select{font:inherit}
@@ -47,16 +48,16 @@
     }
     button:hover{transform:translateY(-1px);filter:brightness(1.05)}
     button:disabled{opacity:.5;cursor:not-allowed;transform:none}
-    button.primary{background:linear-gradient(135deg,#34d399,#22c55e);color:#052410}
-    button.secondary{background:rgba(71,85,105,.85);color:#f1f5f9}
-    button.ghost{background:rgba(15,23,42,.65);color:#dbeafe;border:1px solid var(--line)}
-    button.blue{background:linear-gradient(135deg,#38bdf8,#2563eb);color:#eff6ff}
+    button.primary{background:linear-gradient(135deg,#ff5a5a,#8b0c2f);color:#fff;box-shadow:0 18px 36px rgba(239,68,68,.22)}
+    button.secondary{background:rgba(66,72,85,.92);color:#f3f4f6}
+    button.ghost{background:rgba(255,255,255,.03);color:#e5e7eb;border:1px solid var(--line)}
+    button.blue{background:linear-gradient(135deg,#4c8dff,#1d4ed8);color:#eff6ff}
     button.orange{background:linear-gradient(135deg,#fb923c,#f97316);color:#fff}
     button.danger{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff}
     input,textarea,select{
       width:100%;
-      border:1px solid rgba(148,163,184,.18);
-      background:rgba(7,12,21,.88);
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(8,8,8,.92);
       color:var(--text);
       border-radius:16px;
       padding:13px 14px;
@@ -68,47 +69,113 @@
     .hint{font-size:.84rem;color:var(--muted);line-height:1.45}
     .tiny{font-size:.76rem;color:var(--muted)}
     .login{position:fixed;inset:0;display:grid;place-items:center;padding:24px;background:rgba(3,7,13,.56);backdrop-filter:blur(12px);z-index:30}
-    .login-card{width:min(430px,100%);padding:30px;border-radius:30px;background:linear-gradient(180deg,rgba(12,21,34,.98),rgba(8,14,24,.98));border:1px solid var(--line);box-shadow:var(--shadow)}
+    .login-card{width:min(430px,100%);padding:30px;border-radius:30px;background:linear-gradient(180deg,#171717,#0f0f0f);border:1px solid var(--line);box-shadow:var(--shadow)}
     .brand{display:flex;gap:15px;align-items:center}
-    .brand-mark{width:60px;height:60px;border-radius:20px;background:linear-gradient(135deg,var(--cyan),var(--green));display:grid;place-items:center;color:#03131d;font-weight:800}
+    .brand-mark{width:60px;height:60px;border-radius:20px;background:linear-gradient(135deg,#ff4d4d,#0f172a);display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 15px 30px rgba(239,68,68,.18)}
     .auth-error{min-height:20px;margin-top:10px;color:#fecaca}
-    .app{display:none;height:100vh;grid-template-columns:320px minmax(0,1fr)}
+    .app{display:none;height:100vh;grid-template-columns:380px minmax(0,1fr)}
     .sidebar{
       height:100vh;
-      padding:18px;
-      overflow:auto;
-      background:linear-gradient(180deg,rgba(9,15,25,.98),rgba(6,10,18,.98));
+      overflow:hidden;
+      background:linear-gradient(180deg,#090909,#050505);
       border-right:1px solid var(--line);
+      display:grid;
+      grid-template-columns:74px minmax(0,1fr);
     }
-    .sidebar::-webkit-scrollbar,.main::-webkit-scrollbar,.console-body::-webkit-scrollbar,.project-builds::-webkit-scrollbar{width:10px}
-    .sidebar::-webkit-scrollbar-thumb,.main::-webkit-scrollbar-thumb,.console-body::-webkit-scrollbar-thumb,.project-builds::-webkit-scrollbar-thumb{background:rgba(71,85,105,.6);border-radius:999px}
+    .sidebar-rail{
+      border-right:1px solid rgba(255,255,255,.06);
+      background:linear-gradient(180deg,#111,#090909);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding:14px 10px;
+      gap:16px;
+    }
+    .rail-logo{
+      width:46px;height:46px;border-radius:16px;
+      background:linear-gradient(135deg,#ff4d4d,#631027);
+      display:grid;place-items:center;font-weight:800;color:#fff;
+      box-shadow:0 14px 28px rgba(239,68,68,.25);
+    }
+    .rail-nav{display:flex;flex-direction:column;gap:12px;flex:1;width:100%;align-items:center}
+    .rail-btn{
+      width:46px;height:46px;border-radius:16px;border:1px solid rgba(255,255,255,.06);
+      background:rgba(255,255,255,.03);color:#d1d5db;display:grid;place-items:center;
+      font-size:1.1rem;position:relative;transition:all .18s ease;
+    }
+    .rail-btn.active,.rail-btn:hover{
+      background:linear-gradient(135deg,rgba(239,68,68,.22),rgba(90,12,38,.55));
+      border-color:rgba(239,68,68,.28);
+      color:#fff;
+      box-shadow:0 0 0 1px rgba(239,68,68,.14), 0 14px 28px rgba(239,68,68,.16);
+    }
+    .rail-user{
+      width:42px;height:42px;border-radius:50%;
+      background:linear-gradient(135deg,#ff6b6b,#7f1d1d);display:grid;place-items:center;
+      font-weight:700;color:#fff;box-shadow:0 14px 28px rgba(239,68,68,.18);
+    }
+    .sidebar-panel{
+      height:100vh;
+      overflow:auto;
+      padding:18px 16px 18px 18px;
+      background:linear-gradient(180deg,rgba(12,12,12,.98),rgba(7,7,7,.98));
+    }
+    .sidebar-panel::-webkit-scrollbar,.main::-webkit-scrollbar,.console-body::-webkit-scrollbar,.project-builds::-webkit-scrollbar{width:10px}
+    .sidebar-panel::-webkit-scrollbar-thumb,.main::-webkit-scrollbar-thumb,.console-body::-webkit-scrollbar-thumb,.project-builds::-webkit-scrollbar-thumb{background:rgba(96,96,96,.55);border-radius:999px}
     .sidebar-top,.project-list{margin-bottom:16px}
     .side-panel,.panel,.hero,.console,.downloads,.library,.empty{
       border:1px solid var(--line);
       border-radius:26px;
-      background:linear-gradient(180deg,rgba(18,28,43,.92),rgba(11,18,29,.94));
+      background:linear-gradient(180deg,#171717,#111111);
       box-shadow:var(--shadow);
     }
     .side-panel{padding:16px}
     .sidebar-actions{display:flex;gap:10px;margin-top:14px}
     .project-list{display:grid;gap:10px}
     .project-card{
-      padding:14px;
+      padding:14px 14px 12px;
       border-radius:22px;
-      border:1px solid rgba(148,163,184,.12);
-      background:rgba(10,17,29,.82);
+      border:1px solid rgba(255,255,255,.07);
+      background:linear-gradient(180deg,#141414,#0d0d0d);
       cursor:pointer;
-      transition:transform .16s ease,border-color .16s ease,background .16s ease;
+      transition:transform .18s ease,border-color .18s ease,background .18s ease, box-shadow .18s ease;
+      position:relative;
+      overflow:hidden;
     }
-    .project-card:hover{transform:translateY(-1px);border-color:rgba(34,211,238,.26)}
-    .project-card.active{background:linear-gradient(180deg,rgba(15,35,48,.94),rgba(10,16,28,.94));border-color:rgba(34,211,238,.28)}
+    .project-card::before{
+      content:"";
+      position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(239,68,68,.12),transparent 45%);
+      opacity:0;transition:opacity .18s ease;
+      pointer-events:none;
+    }
+    .project-card:hover,.project-card.active{
+      transform:translateY(-2px);
+      border-color:rgba(239,68,68,.22);
+      box-shadow:0 18px 32px rgba(0,0,0,.26);
+    }
+    .project-card:hover::before,.project-card.active::before{opacity:1}
+    .project-card.active{background:linear-gradient(180deg,#181818,#111111)}
     .project-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-    .status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#64748b}
+    .project-card-title{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .project-card-actions{
+      display:flex;gap:8px;opacity:0;transform:translateY(6px);
+      transition:all .18s ease;pointer-events:none;
+    }
+    .project-card:hover .project-card-actions,.project-card.active .project-card-actions{
+      opacity:1;transform:translateY(0);pointer-events:auto;
+    }
+    .project-mini-btn{
+      border-radius:12px;padding:7px 10px;font-size:.74rem;
+      background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#fff;
+    }
+    .project-mini-btn:hover{background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.24)}
+    .status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#64748b;box-shadow:0 0 0 4px rgba(255,255,255,.03)}
     .status-dot.success{background:var(--green)}
     .status-dot.error{background:var(--red)}
     .status-dot.running{background:var(--cyan)}
     .status-dot.cancelled{background:var(--orange)}
-    .tag,.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;font-size:.74rem;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.14)}
+    .tag,.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;font-size:.74rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)}
     .main{
       height:100vh;
       overflow:auto;
@@ -117,19 +184,19 @@
       grid-template-rows:auto auto auto minmax(0,1fr);
       gap:14px;
     }
-    .hero{padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}
+    .hero{padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;background:linear-gradient(180deg,#181818,#111111)}
     .hero-stats,.row-2,.row-3,.toolbar,.switches,.artifact-buttons{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .stat{min-width:120px;padding:14px 16px;border-radius:20px;background:rgba(7,12,22,.72);border:1px solid rgba(148,163,184,.12)}
+    .stat{min-width:120px;padding:14px 16px;border-radius:20px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.06)}
     .stat strong{display:block;font-size:1.35rem}
     .panel{padding:18px}
     .toolbar{justify-content:space-between}
     .project-shell{display:grid;grid-template-columns:minmax(360px,.95fr) minmax(380px,1.05fr);gap:14px}
-    .section{padding:16px;border-radius:22px;background:rgba(9,15,24,.45);border:1px solid rgba(148,163,184,.12);margin-bottom:12px}
+    .section{padding:16px;border-radius:22px;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);margin-bottom:12px}
     .section:last-child{margin-bottom:0}
     .section h3{margin:0 0 12px;font-size:1rem}
     .row-2{display:grid;grid-template-columns:1fr 1fr}
-    .switch-card{padding:14px;border-radius:18px;background:rgba(7,12,20,.58);border:1px solid rgba(148,163,184,.12);display:grid;gap:8px}
-    .switch-card.active{border-color:rgba(34,211,238,.28);background:rgba(13,32,44,.65)}
+    .switch-card{padding:14px;border-radius:18px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);display:grid;gap:8px}
+    .switch-card.active{border-color:rgba(239,68,68,.24);background:rgba(239,68,68,.06)}
     .switch{position:relative;width:54px;height:30px;border-radius:999px;background:#253244}
     .switch input{position:absolute;inset:0;opacity:0;cursor:pointer}
     .switch span{position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s ease}
@@ -139,20 +206,23 @@
     .screens-row input{flex:1}
     .screens-row button{width:46px;padding:0}
     .console{min-height:320px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr)}
-    .console-head{padding:14px 16px;background:linear-gradient(90deg,#f59e0b,#f97316 68%,#ef4444);display:flex;justify-content:space-between;align-items:center}
+    .console-head{padding:14px 16px;background:linear-gradient(90deg,#ff9a00,#ff6a00 68%,#ff3d3d);display:flex;justify-content:space-between;align-items:center}
     .console-body{margin:0;padding:16px;min-height:0;max-height:34vh;overflow:auto;background:#020617;color:#47ff6a;font-family:"IBM Plex Mono",monospace;font-size:13px;line-height:1.55;white-space:pre-wrap}
-    .downloads{padding:18px;background:linear-gradient(180deg,rgba(12,51,38,.92),rgba(9,18,26,.96));border-color:rgba(74,222,128,.18)}
+    .downloads{padding:18px;background:linear-gradient(180deg,#181818,#111111);border-color:rgba(239,68,68,.16)}
     .library{padding:18px;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr)}
     .project-builds{overflow:auto;display:grid;gap:12px;min-height:0}
-    .build-card{padding:15px;border-radius:22px;background:rgba(8,13,23,.84);border:1px solid rgba(148,163,184,.12)}
+    .build-card{padding:15px;border-radius:22px;background:linear-gradient(180deg,#151515,#0d0d0d);border:1px solid rgba(255,255,255,.06)}
     .build-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px}
     .empty{padding:26px;color:var(--muted)}
     .hidden{display:none !important}
     .timer{font-family:"IBM Plex Mono",monospace;color:#a5f3fc;font-size:1.05rem}
+    .sidebar-footer-note{font-size:.76rem;color:#727a89;margin-top:8px}
     @media (max-width:1220px){
       body{overflow:auto}
       .app{grid-template-columns:1fr;height:auto}
-      .sidebar,.main{height:auto}
+      .sidebar,.sidebar-panel,.main{height:auto}
+      .sidebar{grid-template-columns:1fr}
+      .sidebar-rail{display:none}
       .project-shell{grid-template-columns:1fr}
     }
     @media (max-width:760px){
@@ -185,33 +255,47 @@
 
   <div id="app" class="app">
     <aside class="sidebar">
-      <div class="side-panel sidebar-top">
-        <div class="brand">
-          <div class="brand-mark">PWA</div>
-          <div>
-            <h2 style="margin:0;font-size:1.15rem">Projetos</h2>
-            <p style="margin:5px 0 0;color:var(--muted)">Crie vários apps e entre em cada um separado.</p>
+      <div class="sidebar-rail">
+        <div class="rail-logo">P</div>
+        <div class="rail-nav">
+          <button id="railProjects" class="rail-btn active" title="Projetos">▣</button>
+          <button id="railAdmin" class="rail-btn" title="Administração">◉</button>
+          <button id="railBuilds" class="rail-btn" title="Builds">▤</button>
+          <button id="railSettings" class="rail-btn" title="Configurações">⚙</button>
+        </div>
+        <div class="rail-user" id="railUserBadge">A</div>
+      </div>
+
+      <div class="sidebar-panel">
+        <div class="side-panel sidebar-top">
+          <div class="brand">
+            <div class="brand-mark">PWA</div>
+            <div>
+              <h2 style="margin:0;font-size:1.15rem">Projetos</h2>
+              <p style="margin:5px 0 0;color:var(--muted)">Crie vários apps e entre em cada um separado.</p>
+            </div>
+          </div>
+          <div class="sidebar-actions">
+            <button id="btnNewProject" class="primary" style="flex:1">Novo projeto</button>
+            <button id="btnRefreshProjects" class="ghost">Atualizar</button>
           </div>
         </div>
-        <div class="sidebar-actions">
-          <button id="btnNewProject" class="primary" style="flex:1">Novo projeto</button>
-          <button id="btnRefreshProjects" class="ghost">Atualizar</button>
+
+        <div id="projectList" class="project-list"></div>
+
+        <div class="side-panel">
+          <strong style="display:block;margin-bottom:8px">Biblioteca persistente</strong>
+          <p class="hint" style="margin:0">Cada projeto guarda seus builds com re-download de APK, AAB, log e projeto Xcode.</p>
+          <div class="sidebar-footer-note">Passe o mouse nos cards para abrir mais rápido.</div>
         </div>
-      </div>
 
-      <div id="projectList" class="project-list"></div>
-
-      <div class="side-panel">
-        <strong style="display:block;margin-bottom:8px">Biblioteca persistente</strong>
-        <p class="hint" style="margin:0">Cada projeto guarda seus builds com re-download de APK, AAB, log e projeto Xcode.</p>
-      </div>
-
-      <div class="side-panel" style="margin-top:16px">
-        <strong style="display:block;margin-bottom:8px">Administração</strong>
-        <p class="hint" style="margin:0 0 12px">Gerencie usuários, troque sua senha e confira o status do banco.</p>
-        <div class="sidebar-actions">
-          <button id="btnOpenProjects" class="ghost" style="flex:1">Projetos</button>
-          <button id="btnOpenAdmin" class="blue" style="flex:1">Admin</button>
+        <div class="side-panel" style="margin-top:16px">
+          <strong style="display:block;margin-bottom:8px">Administração</strong>
+          <p class="hint" style="margin:0 0 12px">Gerencie usuários, troque sua senha e confira o status do banco.</p>
+          <div class="sidebar-actions">
+            <button id="btnOpenProjects" class="ghost" style="flex:1">Projetos</button>
+            <button id="btnOpenAdmin" class="blue" style="flex:1">Admin</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -527,6 +611,8 @@
       $('emptyProject').classList.toggle('hidden', currentMode !== 'projects' || !!getSelectedProject());
       $('btnOpenProjects').className = currentMode === 'projects' ? 'blue' : 'ghost';
       $('btnOpenAdmin').className = currentMode === 'admin' ? 'blue' : 'ghost';
+      $('railProjects').classList.toggle('active', currentMode === 'projects');
+      $('railAdmin').classList.toggle('active', currentMode === 'admin');
       $('btnSaveProject').style.display = currentMode === 'projects' ? 'inline-flex' : 'none';
     }
     function setBuildState(running) {
@@ -575,7 +661,12 @@
         <article class="project-card ${project.id === selectedProjectId ? 'active' : ''}" data-project="${escapeHtml(project.id)}">
           <div class="project-card-head">
             <div>
-              <strong>${escapeHtml(project.name || 'Projeto')}</strong>
+              <div class="project-card-title">
+                <strong>${escapeHtml(project.name || 'Projeto')}</strong>
+                <div class="project-card-actions">
+                  <button class="project-mini-btn" data-open-project="${escapeHtml(project.id)}">Abrir</button>
+                </div>
+              </div>
               <div class="tiny">${escapeHtml(project.packageId || project.host || '')}</div>
             </div>
             <span class="status-dot ${escapeHtml(project.lastBuildStatus || '')}"></span>
@@ -585,6 +676,12 @@
       `).join('');
       list.querySelectorAll('[data-project]').forEach(card => {
         card.onclick = () => selectProject(card.getAttribute('data-project'));
+      });
+      list.querySelectorAll('[data-open-project]').forEach(button => {
+        button.onclick = event => {
+          event.stopPropagation();
+          selectProject(button.getAttribute('data-open-project'));
+        };
       });
     }
     function updateTargetCards() {
@@ -799,6 +896,10 @@
     $('btnRefreshBuilds').onclick = () => loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`));
     $('btnOpenProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
     $('btnOpenAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
+    $('railProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
+    $('railAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
+    $('railBuilds').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`)); };
+    $('railSettings').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); };
     $('btnCancel').onclick = async () => { if (buildRunning) await apiFetch('/cancel-build', { method:'POST' }); };
     $('btnSaveProject').onclick = async () => {
       try { await saveProject(); } catch (error) { appendLog(`❌ ${error.message}`); }
@@ -952,6 +1053,7 @@
         localStorage.setItem('pwa_token', token);
         showApp();
         currentUser = { username: payload.username, role: payload.role || 'admin' };
+        $('railUserBadge').textContent = (payload.username || 'A').slice(0,1).toUpperCase();
         dbEnabled = !!payload.dbEnabled;
         $('dbStatusText').textContent = dbEnabled
           ? 'MySQL ativo. Usuários e projetos persistidos no banco.'
@@ -975,6 +1077,7 @@
         const payload = await response.json();
         if (!payload.success) return showLogin();
         currentUser = payload.user || null;
+        $('railUserBadge').textContent = ((currentUser && currentUser.username) || 'A').slice(0,1).toUpperCase();
         dbEnabled = !!payload.dbEnabled;
         $('dbStatusText').textContent = dbEnabled
           ? 'MySQL ativo. Usuários e projetos persistidos no banco.'
