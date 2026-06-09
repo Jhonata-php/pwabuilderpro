@@ -23,6 +23,7 @@ const cheerio = require('cheerio');
 const crypto = require('crypto');
 const https = require('https');
 const { google } = require('googleapis');
+const mysql = require('mysql2/promise');
 const APP_PACKAGE = require('./package.json');
 const { version: APP_VERSION } = APP_PACKAGE;
 
@@ -45,6 +46,11 @@ const BUILD_STORAGE_DIR = path.join(__dirname, 'builds');
 const PROJECTS_FILE = path.join(__dirname, 'data', 'projects.json');
 const SIGNING_STORAGE_DIR = path.join(__dirname, 'data', 'signing');
 const IOS_DEPLOYMENT_TARGET = '15.0';
+const DB_HOST = String(process.env.DB_HOST || process.env.MYSQL_HOST || '').trim();
+const DB_PORT = Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306);
+const DB_NAME = String(process.env.DB_NAME || process.env.MYSQL_DATABASE || '').trim();
+const DB_USER = String(process.env.DB_USER || process.env.MYSQL_USER || '').trim();
+const DB_PASS = String(process.env.DB_PASS || process.env.MYSQL_PASSWORD || '').trim();
 
 app.use(express.static(publicDir));
 app.use(express.json({ limit: '20mb' }));
@@ -55,17 +61,7 @@ app.get('/', (_req, res) => {
 
 const PANEL_USER = process.env.PANEL_USER || 'admin';
 const PANEL_PASS = process.env.PANEL_PASS || 'admin123';
-const panelSessions = new Set();
-
-app.post('/login', (req, res) => {
-  const { username, password } = req.body || {};
-  if (String(username || '') === PANEL_USER && String(password || '') === PANEL_PASS) {
-    const token = crypto.randomBytes(24).toString('hex');
-    panelSessions.add(token);
-    return res.json({ success: true, token, username: PANEL_USER });
-  }
-  res.status(401).json({ success: false, msg: 'Usuário ou senha inválidos.' });
-});
+const panelSessions = new Map();
 
 function getPanelToken(req) {
   return req.headers['x-panel-token'] || req.query.token;
@@ -73,12 +69,42 @@ function getPanelToken(req) {
 
 function requirePanelAuth(req, res, next) {
   const token = getPanelToken(req);
-  if (token && panelSessions.has(String(token))) return next();
+  if (token && panelSessions.has(String(token))) {
+    req.panelUser = panelSessions.get(String(token));
+    return next();
+  }
   return res.status(401).json({ success: false, msg: 'Sessão expirada. Faça login novamente.' });
 }
 
+app.post('/login', async (req, res) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  const user = await findUserByUsername(username);
+  if (!user || !passwordVerify(password, user.password_hash)) {
+    return res.status(401).json({ success: false, msg: 'Usuário ou senha inválidos.' });
+  }
+  const token = crypto.randomBytes(24).toString('hex');
+  panelSessions.set(token, {
+    id: Number(user.id || 0),
+    username: String(user.username),
+    role: String(user.role || 'admin')
+  });
+  return res.json({
+    success: true,
+    token,
+    username: user.username,
+    role: user.role || 'admin',
+    dbEnabled: dbEnabled()
+  });
+});
+
 app.get('/session', requirePanelAuth, (req, res) => {
-  res.json({ success: true, version: APP_VERSION });
+  res.json({
+    success: true,
+    version: APP_VERSION,
+    user: req.panelUser || null,
+    dbEnabled: dbEnabled()
+  });
 });
 
 app.get('/builds', requirePanelAuth, (req, res) => {
@@ -91,16 +117,16 @@ app.get('/builds', requirePanelAuth, (req, res) => {
   });
 });
 
-app.get('/projects', requirePanelAuth, (req, res) => {
+app.get('/projects', requirePanelAuth, async (req, res) => {
   res.json({
     success: true,
-    items: listProjectsWithSummary()
+    items: await listProjectsWithSummary()
   });
 });
 
-app.post('/projects', requirePanelAuth, (req, res) => {
+app.post('/projects', requirePanelAuth, async (req, res) => {
   const name = safeText(req.body?.name || '', 'Novo Projeto', 60);
-  const project = saveProjectRecord({
+  const project = await saveProjectRecord({
     id: generateProjectId(name),
     name,
     host: normalizeUrl(req.body?.host || ''),
@@ -112,12 +138,12 @@ app.post('/projects', requirePanelAuth, (req, res) => {
   res.json({ success: true, item: projectSummaryFromBuilds(project, listStoredBuilds()) });
 });
 
-app.put('/projects/:projectId', requirePanelAuth, (req, res) => {
-  const current = getProject(req.params.projectId);
+app.put('/projects/:projectId', requirePanelAuth, async (req, res) => {
+  const current = await getProject(req.params.projectId);
   if (!current) {
     return res.status(404).json({ success: false, msg: 'Projeto não encontrado.' });
   }
-  const updated = saveProjectRecord({
+  const updated = await saveProjectRecord({
     ...current,
     name: safeText(req.body?.name || current.name || 'Projeto', 'Projeto', 60),
     host: normalizeUrl(req.body?.host || current.host || ''),
@@ -129,6 +155,45 @@ app.put('/projects/:projectId', requirePanelAuth, (req, res) => {
   res.json({ success: true, item: projectSummaryFromBuilds(updated, listStoredBuilds()) });
 });
 
+app.get('/users', requirePanelAuth, async (req, res) => {
+  res.json({ success: true, items: await listUsers() });
+});
+
+app.post('/users', requirePanelAuth, async (req, res) => {
+  const username = safeText(req.body?.username || '', '', 60).toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!username || password.length < 6) {
+    return res.status(400).json({ success: false, msg: 'Informe usuário e senha com pelo menos 6 caracteres.' });
+  }
+  const existing = await findUserByUsername(username);
+  if (existing) {
+    return res.status(409).json({ success: false, msg: 'Esse usuário já existe.' });
+  }
+  const created = await createUserRecord({ username, password, role: 'admin' });
+  res.json({
+    success: true,
+    item: {
+      id: created.id,
+      username: created.username,
+      role: created.role || 'admin'
+    }
+  });
+});
+
+app.post('/me/password', requirePanelAuth, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  if (newPassword.length < 6) {
+    return res.status(400).json({ success: false, msg: 'A nova senha precisa ter pelo menos 6 caracteres.' });
+  }
+  const user = await findUserByUsername(req.panelUser.username);
+  if (!user || !passwordVerify(currentPassword, user.password_hash)) {
+    return res.status(400).json({ success: false, msg: 'Senha atual incorreta.' });
+  }
+  await changeUserPassword({ userId: user.id, newPassword });
+  res.json({ success: true });
+});
+
 
 function cleanLogs(text) {
   return text.toString().replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-z]/g, '');
@@ -136,6 +201,43 @@ function cleanLogs(text) {
 
 function emitLog(msg) {
   io.emit('log', msg);
+}
+
+function dbEnabled() {
+  return !!(DB_HOST && DB_NAME && DB_USER);
+}
+
+let dbPoolPromise = null;
+
+function passwordHash(raw) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(String(raw), salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function passwordVerify(raw, stored) {
+  const [salt, hash] = String(stored || '').split(':');
+  if (!salt || !hash) return false;
+  const candidate = crypto.scryptSync(String(raw), salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(candidate, 'hex'));
+}
+
+async function db() {
+  if (!dbEnabled()) return null;
+  if (!dbPoolPromise) {
+    dbPoolPromise = mysql.createPool({
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_NAME,
+      user: DB_USER,
+      password: DB_PASS,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      charset: 'utf8mb4'
+    });
+  }
+  return dbPoolPromise;
 }
 
 function ensureDir(dir) {
@@ -199,6 +301,107 @@ function writeProjects(projects) {
   fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2));
 }
 
+async function ensureDatabaseSchema() {
+  const pool = await db();
+  if (!pool) return;
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(120) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role VARCHAR(40) NOT NULL DEFAULT 'admin',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id VARCHAR(80) PRIMARY KEY,
+      name VARCHAR(190) NOT NULL,
+      host VARCHAR(255) NOT NULL DEFAULT '',
+      icon_url TEXT NULL,
+      package_id VARCHAR(190) NOT NULL DEFAULT '',
+      notes LONGTEXT NULL,
+      config_json LONGTEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  const [[userCountRow]] = await pool.query('SELECT COUNT(*) AS total FROM users');
+  if (Number(userCountRow.total || 0) === 0) {
+    await pool.query(
+      'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+      [PANEL_USER, passwordHash(PANEL_PASS), 'admin']
+    );
+  }
+
+  const [[projectCountRow]] = await pool.query('SELECT COUNT(*) AS total FROM projects');
+  if (Number(projectCountRow.total || 0) === 0) {
+    const legacy = readProjects();
+    for (const item of legacy) {
+      await pool.query(
+        `INSERT INTO projects (id, name, host, icon_url, package_id, notes, config_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.id,
+          item.name || 'Projeto',
+          item.host || '',
+          item.iconUrl || '',
+          item.packageId || '',
+          item.notes || '',
+          JSON.stringify(item.config || {}),
+          item.createdAt ? new Date(item.createdAt) : new Date(),
+          item.updatedAt ? new Date(item.updatedAt) : new Date()
+        ]
+      );
+    }
+  }
+}
+
+async function listUsers() {
+  const pool = await db();
+  if (!pool) {
+    return [{ id: 1, username: PANEL_USER, role: 'admin', createdAt: new Date().toISOString() }];
+  }
+  const [rows] = await pool.query('SELECT id, username, role, created_at AS createdAt, updated_at AS updatedAt FROM users ORDER BY username');
+  return rows;
+}
+
+async function findUserByUsername(username) {
+  const pool = await db();
+  if (!pool) {
+    if (username === PANEL_USER) {
+      return { id: 1, username: PANEL_USER, role: 'admin', password_hash: passwordHash(PANEL_PASS) };
+    }
+    return null;
+  }
+  const [rows] = await pool.query('SELECT * FROM users WHERE username = ? LIMIT 1', [username]);
+  return rows[0] || null;
+}
+
+async function createUserRecord({ username, password, role = 'admin' }) {
+  const pool = await db();
+  if (!pool) {
+    throw new Error('MySQL não configurado. Cadastre DB_HOST, DB_NAME, DB_USER e DB_PASS para usar usuários persistidos.');
+  }
+  await pool.query(
+    'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+    [username, passwordHash(password), role]
+  );
+  return findUserByUsername(username);
+}
+
+async function changeUserPassword({ userId, newPassword }) {
+  const pool = await db();
+  if (!pool) {
+    throw new Error('Troca de senha persistente requer MySQL configurado.');
+  }
+  await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash(newPassword), userId]);
+}
+
 function generateProjectId(name = 'projeto') {
   return `prj-${slugify(name, 'projeto')}-${crypto.randomBytes(2).toString('hex')}`;
 }
@@ -215,36 +418,78 @@ function projectSummaryFromBuilds(project, builds) {
   };
 }
 
-function listProjectsWithSummary() {
+async function readProjectsStore() {
+  const pool = await db();
+  if (!pool) return readProjects();
+  const [rows] = await pool.query('SELECT * FROM projects ORDER BY updated_at DESC');
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    host: row.host || '',
+    iconUrl: row.icon_url || '',
+    packageId: row.package_id || '',
+    notes: row.notes || '',
+    config: row.config_json ? JSON.parse(row.config_json) : {},
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at
+  }));
+}
+
+async function listProjectsWithSummary() {
   const builds = listStoredBuilds();
-  return readProjects()
+  return (await readProjectsStore())
     .map(project => projectSummaryFromBuilds(project, builds))
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
 
-function getProject(projectId) {
-  return readProjects().find(item => item.id === projectId) || null;
+async function getProject(projectId) {
+  return (await readProjectsStore()).find(item => item.id === projectId) || null;
 }
 
-function saveProjectRecord(project) {
-  const projects = readProjects();
-  const index = projects.findIndex(item => item.id === project.id);
+async function saveProjectRecord(project) {
   const payload = {
     ...project,
     updatedAt: new Date().toISOString()
   };
-  if (index >= 0) {
-    projects[index] = {
-      ...projects[index],
-      ...payload
-    };
-  } else {
-    projects.unshift({
-      createdAt: new Date().toISOString(),
-      ...payload
-    });
+  const pool = await db();
+  if (!pool) {
+    const projects = readProjects();
+    const index = projects.findIndex(item => item.id === project.id);
+    if (index >= 0) {
+      projects[index] = {
+        ...projects[index],
+        ...payload
+      };
+    } else {
+      projects.unshift({
+        createdAt: new Date().toISOString(),
+        ...payload
+      });
+    }
+    writeProjects(projects);
+    return getProject(project.id);
   }
-  writeProjects(projects);
+  await pool.query(
+    `INSERT INTO projects (id, name, host, icon_url, package_id, notes, config_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+     ON DUPLICATE KEY UPDATE
+       name = VALUES(name),
+       host = VALUES(host),
+       icon_url = VALUES(icon_url),
+       package_id = VALUES(package_id),
+       notes = VALUES(notes),
+       config_json = VALUES(config_json),
+       updated_at = NOW()`,
+    [
+      project.id,
+      payload.name || 'Projeto',
+      payload.host || '',
+      payload.iconUrl || '',
+      payload.packageId || '',
+      payload.notes || '',
+      JSON.stringify(payload.config || {})
+    ]
+  );
   return getProject(project.id);
 }
 
@@ -374,15 +619,29 @@ function updateBuildRecord(buildId, patch) {
 async function zipDirectory(sourceDir, outFile, buildDir) {
   ensureDir(path.dirname(outFile));
   if (fileExists(outFile)) fs.rmSync(outFile, { force: true });
-  const code = await runCommand('zip', ['-r', outFile, path.basename(sourceDir)], {
+  let code = await runCommand('zip', ['-r', outFile, path.basename(sourceDir)], {
     cwd: path.dirname(sourceDir),
     buildDir,
     timeoutMs: 8 * 60 * 1000,
     inactivityTimeoutMs: 2 * 60 * 1000,
     heartbeatMs: 20 * 1000
   });
+
   if (code !== 0 || !fileExists(outFile)) {
-    throw new Error('Falha ao compactar os arquivos do build.');
+    emitLog('⚠️ zip indisponível ou falhou. Tentando empacotar com tar.gz como fallback...');
+    const tarOutFile = outFile.replace(/\.zip$/i, '.tar.gz');
+    if (fileExists(tarOutFile)) fs.rmSync(tarOutFile, { force: true });
+    code = await runCommand('tar', ['-czf', tarOutFile, path.basename(sourceDir)], {
+      cwd: path.dirname(sourceDir),
+      buildDir,
+      timeoutMs: 8 * 60 * 1000,
+      inactivityTimeoutMs: 2 * 60 * 1000,
+      heartbeatMs: 20 * 1000
+    });
+    if (code !== 0 || !fileExists(tarOutFile)) {
+      throw new Error('Falha ao compactar os arquivos do build.');
+    }
+    return tarOutFile;
   }
   return outFile;
 }
@@ -1669,9 +1928,9 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   }
 
   const buildDir = path.join(__dirname, 'temp_build');
-  let currentProject = getProject(String(projectId || '').trim());
+  let currentProject = await getProject(String(projectId || '').trim());
   if (!currentProject) {
-    currentProject = saveProjectRecord({
+    currentProject = await saveProjectRecord({
       id: generateProjectId(appName || host || 'projeto'),
       name: safeText(appName || host || 'Projeto', 'Projeto', 60),
       host: normalizeUrl(host || ''),
@@ -1755,7 +2014,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       versionName: vName,
       versionCode: vCode
     });
-    currentProject = saveProjectRecord({
+    currentProject = await saveProjectRecord({
       ...currentProject,
       name: safeAppName,
       host: siteUrl,
@@ -2085,4 +2344,12 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   }
 });
 
-server.listen(3000, () => console.log('🚀 Gerador rodando em http://localhost:3000'));
+(async () => {
+  try {
+    await ensureDatabaseSchema();
+    console.log(dbEnabled() ? '[startup] MySQL conectado e schema pronto.' : '[startup] MySQL não configurado, usando armazenamento local para projetos.');
+  } catch (error) {
+    console.error('[startup] Falha ao inicializar banco:', error.message);
+  }
+  server.listen(3000, () => console.log('🚀 Gerador rodando em http://localhost:3000'));
+})();

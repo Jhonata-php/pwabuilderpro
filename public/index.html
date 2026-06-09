@@ -205,6 +205,15 @@
         <strong style="display:block;margin-bottom:8px">Biblioteca persistente</strong>
         <p class="hint" style="margin:0">Cada projeto guarda seus builds com re-download de APK, AAB, log e projeto Xcode.</p>
       </div>
+
+      <div class="side-panel" style="margin-top:16px">
+        <strong style="display:block;margin-bottom:8px">Administração</strong>
+        <p class="hint" style="margin:0 0 12px">Gerencie usuários, troque sua senha e confira o status do banco.</p>
+        <div class="sidebar-actions">
+          <button id="btnOpenProjects" class="ghost" style="flex:1">Projetos</button>
+          <button id="btnOpenAdmin" class="blue" style="flex:1">Admin</button>
+        </div>
+      </div>
     </aside>
 
     <main class="main">
@@ -241,6 +250,63 @@
 
       <section id="emptyProject" class="empty">
         Escolha um projeto na sidebar ou clique em <strong>Novo projeto</strong> para abrir um workspace próprio com formulário, console e histórico.
+      </section>
+
+      <section id="adminWorkspace" class="project-shell hidden">
+        <div class="panel">
+          <div class="section">
+            <h3>Painel de usuários</h3>
+            <p id="adminSummary" class="hint">Gerencie quem acessa o painel e mantenha o login seguro.</p>
+            <div class="row-2" style="margin-top:12px">
+              <div>
+                <label for="newUsername">Novo usuário</label>
+                <input id="newUsername" placeholder="novo-admin">
+              </div>
+              <div>
+                <label for="newUserPassword">Senha inicial</label>
+                <input id="newUserPassword" type="password" placeholder="mínimo 6 caracteres">
+              </div>
+            </div>
+            <div class="toolbar" style="margin-top:12px">
+              <button id="btnCreateUser" class="primary">Criar usuário</button>
+              <button id="btnRefreshUsers" class="ghost">Atualizar lista</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Trocar minha senha</h3>
+            <div class="row-2">
+              <div>
+                <label for="currentPassword">Senha atual</label>
+                <input id="currentPassword" type="password">
+              </div>
+              <div>
+                <label for="nextPassword">Nova senha</label>
+                <input id="nextPassword" type="password">
+              </div>
+            </div>
+            <button id="btnChangePassword" class="secondary" style="margin-top:12px">Atualizar senha</button>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:14px;min-height:0">
+          <section class="downloads">
+            <strong>Status do ambiente</strong>
+            <p id="dbStatusText" class="hint" style="margin:8px 0 0">Verificando banco...</p>
+          </section>
+
+          <section class="library">
+            <div class="toolbar" style="margin-bottom:12px">
+              <div>
+                <strong>Usuários do painel</strong>
+                <div class="hint">Lista persistida no banco quando o MySQL estiver configurado.</div>
+              </div>
+            </div>
+            <div id="userList" class="project-builds">
+              <div class="empty">Nenhum usuário carregado ainda.</div>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section id="projectWorkspace" class="project-shell hidden">
@@ -421,10 +487,13 @@
     let projects = [];
     let builds = [];
     let selectedProjectId = localStorage.getItem('pwa_selected_project') || '';
+    let currentMode = localStorage.getItem('pwa_mode') || 'projects';
     let buildRunning = false;
     let timerInt = null;
     let startTime = 0;
     let currentBuildId = '';
+    let currentUser = null;
+    let dbEnabled = false;
 
     function authHeaders(){ return token ? { 'x-panel-token': token } : {}; }
     async function apiFetch(url, options = {}) {
@@ -449,6 +518,16 @@
       $('login').style.display = 'none';
       $('app').style.display = 'grid';
       $('loginError').textContent = '';
+    }
+    function setMode(mode) {
+      currentMode = mode === 'admin' ? 'admin' : 'projects';
+      localStorage.setItem('pwa_mode', currentMode);
+      $('adminWorkspace').classList.toggle('hidden', currentMode !== 'admin');
+      $('projectWorkspace').classList.toggle('hidden', currentMode !== 'projects' || !getSelectedProject());
+      $('emptyProject').classList.toggle('hidden', currentMode !== 'projects' || !!getSelectedProject());
+      $('btnOpenProjects').className = currentMode === 'projects' ? 'blue' : 'ghost';
+      $('btnOpenAdmin').className = currentMode === 'admin' ? 'blue' : 'ghost';
+      $('btnSaveProject').style.display = currentMode === 'projects' ? 'inline-flex' : 'none';
     }
     function setBuildState(running) {
       buildRunning = running;
@@ -544,14 +623,34 @@
     }
     function updateHero(project) {
       const projectBuilds = builds.filter(item => item.projectId === project?.id);
-      $('heroTitle').textContent = project ? project.name : 'Selecione um projeto';
-      $('heroSubtitle').textContent = project ? (project.host || 'Configure a PWA e gere os artefatos desse projeto.') : 'Crie um projeto na sidebar para começar.';
+      $('heroTitle').textContent = currentMode === 'admin' ? 'Administração do Painel' : (project ? project.name : 'Selecione um projeto');
+      $('heroSubtitle').textContent = currentMode === 'admin'
+        ? `Usuário logado: ${currentUser ? currentUser.username : '-'}`
+        : (project ? (project.host || 'Configure a PWA e gere os artefatos desse projeto.') : 'Crie um projeto na sidebar para começar.');
       $('projectNameBar').textContent = project ? project.name : 'Nenhum projeto selecionado';
       $('projectMetaBar').textContent = project ? `${project.packageId || 'Sem packageId'} • ${project.buildCount || 0} builds` : 'Quando você entrar em um projeto, tudo aqui fica separado para ele.';
       $('statBuilds').textContent = String(projectBuilds.length);
       $('statStatus').textContent = statusLabel(project?.lastBuildStatus || '');
-      $('emptyProject').classList.toggle('hidden', !!project);
-      $('projectWorkspace').classList.toggle('hidden', !project);
+      $('emptyProject').classList.toggle('hidden', currentMode !== 'projects' || !!project);
+      $('projectWorkspace').classList.toggle('hidden', currentMode !== 'projects' || !project);
+    }
+    function renderUsers(items) {
+      const box = $('userList');
+      if (!items.length) {
+        box.innerHTML = '<div class="empty">Nenhum usuário cadastrado.</div>';
+        return;
+      }
+      box.innerHTML = items.map(item => `
+        <article class="build-card">
+          <div class="build-card-head">
+            <div>
+              <strong>${escapeHtml(item.username)}</strong>
+              <div class="tiny">${escapeHtml(item.role || 'admin')}</div>
+            </div>
+            <span class="chip">${escapeHtml(formatDate(item.createdAt))}</span>
+          </div>
+        </article>
+      `).join('');
     }
     function renderArtifactButtons(artifacts) {
       if (!artifacts || !artifacts.length) return '<span class="tiny">Sem artefatos.</span>';
@@ -610,6 +709,11 @@
       localStorage.setItem('pwa_selected_project', selectedProjectId || '');
       renderProjectList();
       selectProject(selectedProjectId, false);
+    }
+    async function loadUsers() {
+      const response = await apiFetch('/users');
+      const payload = await response.json();
+      renderUsers(payload.items || []);
     }
     async function loadBuilds() {
       const project = getSelectedProject();
@@ -693,6 +797,8 @@
     $('btnClearLog').onclick = () => { $('log').textContent = ''; };
     $('btnRefreshProjects').onclick = () => loadProjects().catch(error => appendLog(`⚠️ ${error.message}`));
     $('btnRefreshBuilds').onclick = () => loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`));
+    $('btnOpenProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
+    $('btnOpenAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
     $('btnCancel').onclick = async () => { if (buildRunning) await apiFetch('/cancel-build', { method:'POST' }); };
     $('btnSaveProject').onclick = async () => {
       try { await saveProject(); } catch (error) { appendLog(`❌ ${error.message}`); }
@@ -710,6 +816,46 @@
       await loadProjects();
       selectProject(payload.item.id);
       appendLog(`> Projeto criado: ${payload.item.name}`);
+    };
+    $('btnRefreshUsers').onclick = () => loadUsers().catch(error => appendLog(`⚠️ ${error.message}`));
+    $('btnCreateUser').onclick = async () => {
+      try {
+        const response = await apiFetch('/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: $('newUsername').value.trim(),
+            password: $('newUserPassword').value
+          })
+        });
+        const payload = await response.json();
+        if (!payload.success) throw new Error(payload.msg || 'Falha ao criar usuário.');
+        $('newUsername').value = '';
+        $('newUserPassword').value = '';
+        await loadUsers();
+        appendLog(`> Usuário criado: ${payload.item.username}`);
+      } catch (error) {
+        appendLog(`❌ ${error.message}`);
+      }
+    };
+    $('btnChangePassword').onclick = async () => {
+      try {
+        const response = await apiFetch('/me/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            currentPassword: $('currentPassword').value,
+            newPassword: $('nextPassword').value
+          })
+        });
+        const payload = await response.json();
+        if (!payload.success) throw new Error(payload.msg || 'Falha ao trocar senha.');
+        $('currentPassword').value = '';
+        $('nextPassword').value = '';
+        appendLog('> Senha atualizada com sucesso.');
+      } catch (error) {
+        appendLog(`❌ ${error.message}`);
+      }
     };
 
     $('btnFetch').onclick = async () => {
@@ -805,8 +951,18 @@
         token = payload.token;
         localStorage.setItem('pwa_token', token);
         showApp();
+        currentUser = { username: payload.username, role: payload.role || 'admin' };
+        dbEnabled = !!payload.dbEnabled;
+        $('dbStatusText').textContent = dbEnabled
+          ? 'MySQL ativo. Usuários e projetos persistidos no banco.'
+          : 'MySQL não configurado. Projetos locais e usuários básicos via ambiente.';
+        $('adminSummary').textContent = currentUser
+          ? `Logado como ${currentUser.username}.`
+          : 'Gerencie quem acessa o painel e mantenha o login seguro.';
         await loadProjects();
         if (selectedProjectId) await loadBuilds();
+        if (currentMode === 'admin') await loadUsers();
+        setMode(currentMode);
       } catch (error) {
         $('loginError').textContent = error.message || 'Erro de conexão.';
       }
@@ -818,9 +974,19 @@
         const response = await apiFetch('/session');
         const payload = await response.json();
         if (!payload.success) return showLogin();
+        currentUser = payload.user || null;
+        dbEnabled = !!payload.dbEnabled;
+        $('dbStatusText').textContent = dbEnabled
+          ? 'MySQL ativo. Usuários e projetos persistidos no banco.'
+          : 'MySQL não configurado. Projetos locais e usuários básicos via ambiente.';
+        $('adminSummary').textContent = currentUser
+          ? `Logado como ${currentUser.username}.`
+          : 'Gerencie quem acessa o painel e mantenha o login seguro.';
         showApp();
         await loadProjects();
         if (selectedProjectId) await loadBuilds();
+        if (currentMode === 'admin') await loadUsers();
+        setMode(currentMode);
       } catch (_) {
         showLogin();
       }
