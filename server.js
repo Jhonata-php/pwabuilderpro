@@ -330,6 +330,23 @@ async function ensureDatabaseSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_signing_keys (
+      project_id VARCHAR(80) PRIMARY KEY,
+      original_name VARCHAR(255) NOT NULL,
+      key_alias VARCHAR(120) NOT NULL,
+      store_password VARCHAR(255) NOT NULL,
+      sha1 VARCHAR(120) NULL,
+      sha256 VARCHAR(200) NULL,
+      source VARCHAR(40) NOT NULL DEFAULT 'generated',
+      keystore_blob LONGBLOB NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_project_signing_key_project
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   const [[userCountRow]] = await pool.query('SELECT COUNT(*) AS total FROM users');
   if (Number(userCountRow.total || 0) === 0) {
     await pool.query(
@@ -511,6 +528,75 @@ function readSigningMetadata(projectId) {
   }
 }
 
+async function readSigningRecordFromDb(projectId) {
+  const pool = await db();
+  if (!pool) return null;
+  const [rows] = await pool.query(
+    `SELECT project_id, original_name, key_alias, store_password, sha1, sha256, source, keystore_blob
+       FROM project_signing_keys
+      WHERE project_id = ?
+      LIMIT 1`,
+    [projectId]
+  );
+  return rows[0] || null;
+}
+
+async function writeSigningRecordToDb({ projectId, originalName, keyAlias, storePassword, sha1 = '', sha256 = '', source = 'generated', binaryPath }) {
+  const pool = await db();
+  if (!pool || !binaryPath || !fileExists(binaryPath)) return;
+  await pool.query(
+    `INSERT INTO project_signing_keys
+      (project_id, original_name, key_alias, store_password, sha1, sha256, source, keystore_blob)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       original_name = VALUES(original_name),
+       key_alias = VALUES(key_alias),
+       store_password = VALUES(store_password),
+       sha1 = VALUES(sha1),
+       sha256 = VALUES(sha256),
+       source = VALUES(source),
+       keystore_blob = VALUES(keystore_blob),
+       updated_at = NOW()`,
+    [
+      projectId,
+      String(originalName || path.basename(binaryPath)),
+      String(keyAlias || 'app'),
+      String(storePassword || ''),
+      String(sha1 || ''),
+      String(sha256 || ''),
+      String(source || 'generated'),
+      fs.readFileSync(binaryPath)
+    ]
+  );
+}
+
+async function loadStoredSigningRecord(projectId) {
+  const dbRow = await readSigningRecordFromDb(projectId);
+  if (dbRow && dbRow.keystore_blob) {
+    const dir = signingDirForProject(projectId);
+    ensureDir(dir);
+    const ext = path.extname(String(dbRow.original_name || '')).toLowerCase() || '.p12';
+    const keystorePath = path.join(dir, `restored-signing-key${ext}`);
+    fs.writeFileSync(keystorePath, Buffer.from(dbRow.keystore_blob));
+    const payload = {
+      path: keystorePath,
+      alias: String(dbRow.key_alias || 'app'),
+      storePassword: String(dbRow.store_password || ''),
+      createdAt: new Date().toISOString(),
+      source: String(dbRow.source || 'db'),
+      originalName: String(dbRow.original_name || path.basename(keystorePath)),
+      sha1: String(dbRow.sha1 || ''),
+      sha256: String(dbRow.sha256 || '')
+    };
+    fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
+    return payload;
+  }
+
+  const meta = readSigningMetadata(projectId);
+  if (meta && fileExists(meta.path)) return meta;
+  return null;
+}
+
 function keystoreStoreTypeForPath(filePath) {
   const ext = path.extname(String(filePath || '')).toLowerCase();
   if (ext === '.p12' || ext === '.pfx') return 'PKCS12';
@@ -558,6 +644,16 @@ async function persistUploadedSigningKey({ projectId, uploadedFilePath, original
   if (sha1) payload.sha1 = sha1;
   if (sha256) payload.sha256 = sha256;
   fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
+  await writeSigningRecordToDb({
+    projectId,
+    originalName: payload.originalName,
+    keyAlias,
+    storePassword,
+    sha1,
+    sha256,
+    source: 'uploaded',
+    binaryPath: keystorePath
+  });
   return payload;
 }
 
@@ -592,7 +688,7 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir, uplo
     };
   }
 
-  const meta = readSigningMetadata(projectId);
+  const meta = await loadStoredSigningRecord(projectId);
   if (meta && fileExists(meta.path) && meta.alias && meta.storePassword) {
     emitLog('> [ANDROID] Reutilizando keystore existente deste projeto para manter a mesma assinatura.');
     return {
@@ -630,6 +726,16 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir, uplo
   if (sha1) payload.sha1 = sha1;
   if (sha256) payload.sha256 = sha256;
   fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
+  await writeSigningRecordToDb({
+    projectId,
+    originalName: path.basename(keystorePath),
+    keyAlias,
+    storePassword,
+    sha1,
+    sha256,
+    source: 'generated',
+    binaryPath: keystorePath
+  });
   return {
     keyAlias,
     storePassword,
