@@ -529,9 +529,11 @@ function inspectKeystore({ keystorePath, storePassword, keyAlias }) {
     const msg = output.trim() || 'Falha ao validar keystore.';
     throw new Error(msg);
   }
-  const match = output.match(/SHA1:\s*([A-F0-9:]{40,})/i);
+  const matchSha1 = output.match(/SHA1:\s*([A-F0-9:]{40,})/i);
+  const matchSha256 = output.match(/SHA256:\s*([A-F0-9:]{64,})/i);
   return {
-    sha1: match ? String(match[1]).toUpperCase() : '',
+    sha1: matchSha1 ? String(matchSha1[1]).toUpperCase() : '',
+    sha256: matchSha256 ? String(matchSha256[1]).toUpperCase() : '',
     output
   };
 }
@@ -552,7 +554,9 @@ async function persistUploadedSigningKey({ projectId, uploadedFilePath, original
   };
   const inspected = inspectKeystore({ keystorePath, storePassword, keyAlias });
   const sha1 = inspected.sha1;
+  const sha256 = inspected.sha256;
   if (sha1) payload.sha1 = sha1;
+  if (sha256) payload.sha256 = sha256;
   fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
   return payload;
 }
@@ -583,7 +587,8 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir, uplo
       storePassword: password,
       keystorePath: uploaded.path,
       reused: false,
-      sha1: uploaded.sha1 || ''
+      sha1: uploaded.sha1 || '',
+      sha256: uploaded.sha256 || ''
     };
   }
 
@@ -595,7 +600,8 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir, uplo
       storePassword: String(meta.storePassword),
       keystorePath: String(meta.path),
       reused: true,
-      sha1: String(meta.sha1 || '')
+      sha1: String(meta.sha1 || ''),
+      sha256: String(meta.sha256 || '')
     };
   }
 
@@ -620,14 +626,17 @@ async function ensureProjectSigningKey({ projectId, appName, env, buildDir, uplo
   };
   const inspected = inspectKeystore({ keystorePath, storePassword, keyAlias });
   const sha1 = inspected.sha1;
+  const sha256 = inspected.sha256;
   if (sha1) payload.sha1 = sha1;
+  if (sha256) payload.sha256 = sha256;
   fs.writeFileSync(signingMetadataPath(projectId), JSON.stringify(payload, null, 2));
   return {
     keyAlias,
     storePassword,
     keystorePath,
     reused: false,
-    sha1: payload.sha1 || ''
+    sha1: payload.sha1 || '',
+    sha256: payload.sha256 || ''
   };
 }
 
@@ -1173,26 +1182,30 @@ function configureGeneratedAndroidProject(buildDir, { keystorePath, keyAlias, st
   }
 
   let appGradle = fs.readFileSync(appGradlePath, 'utf8');
-  if (!appGradle.includes('signingConfigs {')) {
-    const signingBlock = [
-      'android {',
-      '    signingConfigs {',
-      '        release {',
-      `            storeFile file('${escapeGradleString(keystorePath)}')`,
-      `            storePassword '${escapeGradleString(storePassword)}'`,
-      `            keyAlias '${escapeGradleString(keyAlias)}'`,
-      `            keyPassword '${escapeGradleString(storePassword)}'`,
-      "            storeType 'PKCS12'",
-      '        }',
-      '    }'
-    ].join('\n');
-    appGradle = appGradle.replace('android {', signingBlock);
+  const storeType = keystoreStoreTypeForPath(keystorePath) || 'JKS';
+  const releaseSigningBlock = [
+    '    signingConfigs {',
+    '        release {',
+    `            storeFile file('${escapeGradleString(keystorePath)}')`,
+    `            storePassword '${escapeGradleString(storePassword)}'`,
+    `            keyAlias '${escapeGradleString(keyAlias)}'`,
+    `            keyPassword '${escapeGradleString(storePassword)}'`,
+    `            storeType '${escapeGradleString(storeType)}'`,
+    '        }',
+    '    }'
+  ].join('\n');
+
+  if (/signingConfigs\s*\{[\s\S]*?(?:\r?\n)[ \t]{4}\}/m.test(appGradle)) {
+    appGradle = appGradle.replace(/signingConfigs\s*\{[\s\S]*?(?:\r?\n)[ \t]{4}\}/m, releaseSigningBlock);
+  } else {
+    appGradle = appGradle.replace(/android\s*\{/m, `android {\n${releaseSigningBlock}`);
   }
 
-  appGradle = appGradle.replace(
-    /buildTypes\s*\{\s*release\s*\{\s*minifyEnabled true/s,
-    "buildTypes {\n        release {\n            signingConfig signingConfigs.release\n            minifyEnabled true"
-  );
+  if (/release\s*\{[\s\S]*?signingConfig\s+signingConfigs\.release/m.test(appGradle)) {
+    appGradle = appGradle.replace(/signingConfig\s+signingConfigs\.[A-Za-z0-9_]+/g, 'signingConfig signingConfigs.release');
+  } else if (/buildTypes\s*\{[\s\S]*?release\s*\{/m.test(appGradle)) {
+    appGradle = appGradle.replace(/(buildTypes\s*\{[\s\S]*?release\s*\{)/m, '$1\n            signingConfig signingConfigs.release');
+  }
   fs.writeFileSync(appGradlePath, appGradle);
 
   const rootGradlePath = path.join(buildDir, 'build.gradle');
@@ -1357,6 +1370,54 @@ function buildPlayListingTexts({ appName, shortName, description, host, packageI
     `Versão ${versionName || '1.0.0'} (${versionCode || 1})`
   );
   return { title, shortDescription, fullDescription, releaseNotes };
+}
+
+function buildAssetLinksJson({ packageId, sha256 }) {
+  if (!packageId || !sha256) return [];
+  return [{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: packageId,
+      sha256_cert_fingerprints: [sha256]
+    }
+  }];
+}
+
+function createAssetLinksArtifacts({ buildDir, appName, host, packageId, sha1, sha256 }) {
+  if (!host || !packageId || !sha256) return null;
+  const hostUrl = normalizeUrl(host);
+  const parsed = new URL(hostUrl);
+  const baseDir = path.join(buildDir, 'assetlinks');
+  const wellKnownDir = path.join(baseDir, '.well-known');
+  ensureDir(wellKnownDir);
+
+  const assetlinks = buildAssetLinksJson({ packageId, sha256 });
+  fs.writeFileSync(path.join(wellKnownDir, 'assetlinks.json'), JSON.stringify(assetlinks, null, 2) + '\n');
+
+  const instructions = [
+    `${appName} Android App Links / TWA`,
+    '',
+    `Dominio: ${parsed.origin}`,
+    `Package: ${packageId}`,
+    `SHA1 da keystore usada no build: ${sha1 || '-'}`,
+    `SHA256 da keystore usada no build: ${sha256 || '-'}`,
+    '',
+    'Como remover a barra de URL e abrir como app de verdade:',
+    '1. Publique o arquivo .well-known/assetlinks.json deste pacote no mesmo dominio do app.',
+    `2. O arquivo final precisa responder em: ${parsed.origin}/.well-known/assetlinks.json`,
+    '3. Se o app for distribuido pela Google Play usando App Signing, confirme no Play Console se o SHA256 publicado no assetlinks.json e o certificado de assinatura do app distribudo sao o mesmo.',
+    '4. Se o Play Console mostrar outro certificado de App Signing, troque o SHA256 no assetlinks.json pelo fingerprint de App Signing da Google Play.',
+    '',
+    'Sem esse vínculo de Digital Asset Links, o Android abre a TWA com barra/URL, parecendo um site por cima do app.'
+  ].join('\n') + '\n';
+  fs.writeFileSync(path.join(baseDir, 'README-ASSETLINKS.txt'), instructions);
+
+  return {
+    baseDir,
+    jsonPath: path.join(wellKnownDir, 'assetlinks.json'),
+    readmePath: path.join(baseDir, 'README-ASSETLINKS.txt')
+  };
 }
 
 async function downloadBinaryFile(url, outFile) {
@@ -2170,6 +2231,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
       const storePassword = signing.storePassword;
       const keystorePath = signing.keystorePath;
       if (signing.sha1) emitLog(`> [ANDROID] Keystore em uso SHA1: ${signing.sha1}`);
+      if (signing.sha256) emitLog(`> [ANDROID] Keystore em uso SHA256: ${signing.sha256}`);
       const env = {
         ...envBase,
         BUBBLEWRAP_KEYSTORE_PASSWORD: storePassword,
@@ -2320,6 +2382,34 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
         type: 'txt'
       });
       if (playCopyArtifact) artifacts.push(playCopyArtifact);
+
+      const assetlinksPack = createAssetLinksArtifacts({
+        buildDir,
+        appName: safeAppName,
+        host: siteUrl,
+        packageId: finalPackageId,
+        sha1: signing.sha1 || '',
+        sha256: signing.sha256 || ''
+      });
+      if (assetlinksPack) {
+        const assetlinksZip = await zipDirectory(assetlinksPack.baseDir, path.join(buildDir, 'dist', 'assetlinks-package.zip'), buildDir);
+        const assetlinksArtifact = archiveBuildArtifact(buildId, assetlinksZip, `${slugify(safeAppName)}-${buildId}-assetlinks.zip`, {
+          key: 'assetlinks',
+          label: 'Pacote assetlinks / TWA',
+          platform: 'android',
+          type: 'zip'
+        });
+        if (assetlinksArtifact) artifacts.push(assetlinksArtifact);
+        const assetlinksJsonArtifact = archiveBuildArtifact(buildId, assetlinksPack.jsonPath, `${slugify(safeAppName)}-${buildId}-assetlinks.json`, {
+          key: 'assetlinks-json',
+          label: 'assetlinks.json',
+          platform: 'android',
+          type: 'json'
+        });
+        if (assetlinksJsonArtifact) artifacts.push(assetlinksJsonArtifact);
+      } else {
+        emitLog('⚠️ Não foi possível gerar o assetlinks.json porque faltou packageId ou SHA256 da assinatura.');
+      }
 
       if (playPublisherEnabled()) {
         if (!aabFileForPlay) {

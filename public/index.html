@@ -73,17 +73,16 @@
     .brand{display:flex;gap:15px;align-items:center}
     .brand-mark{width:60px;height:60px;border-radius:20px;background:linear-gradient(135deg,#ff4d4d,#0f172a);display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 15px 30px rgba(239,68,68,.18)}
     .auth-error{min-height:20px;margin-top:10px;color:#fecaca}
-    .app{display:none;height:100vh;grid-template-columns:320px minmax(0,1fr)}
+    .app{display:none;height:100vh;grid-template-columns:108px minmax(0,1fr)}
     .sidebar{
       position:sticky;
       top:0;
       height:100vh;
       overflow:hidden;
-      padding:22px 16px 16px;
+      padding:20px 14px 16px;
       background:
-        radial-gradient(circle at top right, rgba(239,68,68,.10), transparent 24%),
-        radial-gradient(circle at 8% 18%, rgba(239,68,68,.07), transparent 34%),
-        linear-gradient(180deg,#111111,#101010 55%,#0f0f10);
+        radial-gradient(circle at 50% 0%, rgba(239,68,68,.12), transparent 32%),
+        linear-gradient(180deg,#0d0d0e,#101012 56%,#0b0b0c);
       border-right:1px solid rgba(255,255,255,.08);
       z-index:20;
     }
@@ -102,8 +101,9 @@
       overflow:auto;
       display:flex;
       flex-direction:column;
-      gap:16px;
-      padding-right:2px;
+      align-items:center;
+      gap:18px;
+      padding-right:0;
       scrollbar-width:thin;
       scrollbar-color:rgba(255,255,255,.22) transparent;
     }
@@ -118,71 +118,73 @@
       border:2px solid rgba(0,0,0,.22);
     }
     .brand-card{
-      padding:0 8px 20px;
-      border-bottom:1px solid rgba(255,255,255,.07);
-      margin-bottom:2px;
+      width:100%;
+      padding:4px 0 6px;
+      display:grid;
+      place-items:center;
     }
-    .brand-lockup{display:flex;align-items:center;gap:14px;min-height:72px}
+    .brand-lockup{display:grid;gap:10px;justify-items:center;min-height:auto}
     .brand-mark{
-      width:52px;height:52px;border-radius:18px;
-      background:linear-gradient(145deg,#3ef0b0,#11c97f);
+      width:58px;height:58px;border-radius:22px;
+      background:linear-gradient(145deg,#41f1b5,#14c67f);
       display:grid;place-items:center;
       color:#03140d;font-weight:900;
-      box-shadow:0 16px 30px rgba(17,201,127,.22);
-      flex:0 0 52px;
+      box-shadow:0 18px 36px rgba(17,201,127,.22);
+      flex:0 0 58px;
     }
-    .brand-copy strong{display:block;font-size:1.02rem;line-height:1.05}
-    .brand-copy span{display:block;margin-top:4px;color:rgba(217,229,244,.56);font-size:.8rem;line-height:1.35}
+    .brand-copy{display:none}
     .sidebar-nav{
       display:flex;
       flex-direction:column;
-      gap:12px;
+      gap:14px;
       flex:0 0 auto;
+      width:100%;
+      align-items:center;
     }
     .sidebar-link{
-      min-height:62px;
-      border-radius:20px;
-      border:1px solid transparent;
-      background:transparent;
+      width:78px;
+      min-height:78px;
+      border-radius:26px;
+      border:1px solid rgba(255,255,255,.05);
+      background:rgba(255,255,255,.02);
       color:#eef2ff;
-      display:flex;
-      align-items:center;
-      gap:14px;
-      width:100%;
-      padding:8px 12px;
-      text-align:left;
+      display:grid;
+      place-items:center;
+      gap:8px;
+      padding:10px 8px;
+      text-align:center;
       position:relative;
       overflow:hidden;
       font-family:inherit;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
     }
     .sidebar-link::before{
       content:"";
       position:absolute;
-      left:0;top:13px;bottom:13px;
-      width:4px;
-      border-radius:0 999px 999px 0;
+      inset:auto 16px 0;
+      height:3px;
       background:transparent;
       transition:background .2s ease, box-shadow .2s ease;
     }
     .sidebar-link:hover{
-      background:rgba(255,255,255,.035);
-      border-color:rgba(255,255,255,.04);
-      transform:translateX(2px);
+      background:rgba(255,255,255,.05);
+      border-color:rgba(255,255,255,.08);
+      transform:translateY(-2px);
     }
     .sidebar-link.active{
-      background:linear-gradient(180deg,rgba(62,16,23,.96),rgba(21,14,17,.98));
-      border-color:rgba(239,68,68,.24);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 16px 28px rgba(0,0,0,.22);
+      background:linear-gradient(180deg,rgba(73,16,28,.96),rgba(35,14,18,.98));
+      border-color:rgba(239,68,68,.3);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 18px 28px rgba(0,0,0,.24);
     }
     .sidebar-link.active::before{
       background:#ff4d4d;
       box-shadow:0 0 18px rgba(239,68,68,.5);
     }
     .sidebar-link .nav-icon{
-      width:48px;height:48px;flex:0 0 48px;
-      border-radius:17px;
+      width:46px;height:46px;flex:0 0 46px;
+      border-radius:18px;
       display:grid;place-items:center;
-      background:rgba(255,255,255,.055);
+      background:rgba(255,255,255,.04);
       border:1px solid rgba(255,255,255,.04);
       box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 10px 18px rgba(0,0,0,.18);
     }
@@ -195,35 +197,44 @@
       fill:none;stroke:currentColor;stroke-width:1.9;
       stroke-linecap:round;stroke-linejoin:round;
     }
-    .nav-copy{display:grid;gap:4px;min-width:0}
-    .nav-copy strong{font-size:.96rem;line-height:1.1}
-    .nav-copy span{
-      color:#8f99aa;
-      font-size:.77rem;
-      line-height:1.28;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    }
-    .sidebar-section-head{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin:4px 0 0;
-      padding:0 2px;
-    }
-    .sidebar-section-head strong{font-size:.96rem}
-    .sidebar-section-head span{font-size:.76rem;color:#8791a4}
-    .sidebar-page{
+    .nav-copy{display:none}
+    .sidebar-quick{
+      margin-top:4px;
+      width:100%;
       display:grid;
-      gap:16px;
+      justify-items:center;
+      gap:10px;
     }
-    .sidebar-page.hidden{display:none}
-    .sidebar-mini-card{
-      padding:16px;
-      border:1px solid rgba(255,255,255,.07);
-      border-radius:24px;
+    .rail-action{
+      width:78px;
+      min-height:78px;
+      border-radius:26px;
+      display:grid;
+      place-items:center;
+      padding:10px 8px;
+      text-align:center;
       background:rgba(255,255,255,.03);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.06);
+      color:var(--text);
+    }
+    .rail-action.primary{
+      background:linear-gradient(135deg,#ff5c62,#7e132f);
+      box-shadow:0 18px 32px rgba(239,68,68,.24);
+    }
+    .rail-action .plus{
+      display:grid;
+      gap:6px;
+      justify-items:center;
+      font-size:.68rem;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+    }
+    .rail-action .plus strong{
+      width:34px;height:34px;border-radius:14px;
+      display:grid;place-items:center;
+      background:rgba(255,255,255,.14);
+      font-size:1.35rem;
+      line-height:1;
     }
     .side-panel,.panel,.hero,.console,.downloads,.library,.empty{
       border:1px solid var(--line);
@@ -232,9 +243,7 @@
       box-shadow:var(--shadow);
     }
     .side-panel{padding:16px}
-    .sidebar-top,.project-list{margin-bottom:0}
-    .sidebar-actions{display:flex;gap:10px;margin-top:14px}
-    .project-list{display:grid;gap:10px}
+    .project-list{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
     .project-list-empty{
       padding:18px;
       border:1px solid rgba(255,255,255,.06);
@@ -261,7 +270,7 @@
       pointer-events:none;
     }
     .project-card:hover,.project-card.active{
-      transform:translateX(2px);
+      transform:translateY(-3px);
       border-color:rgba(255,255,255,.04);
       background:rgba(255,255,255,.03);
       box-shadow:none;
@@ -304,13 +313,43 @@
       overflow:auto;
       padding:18px;
       display:grid;
-      grid-template-rows:auto auto auto minmax(0,1fr);
+      grid-template-rows:auto auto auto auto minmax(0,1fr);
       gap:14px;
     }
     .hero{padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;background:linear-gradient(180deg,#181818,#111111)}
     .hero-stats,.row-2,.row-3,.toolbar,.switches,.artifact-buttons{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .stat{min-width:120px;padding:14px 16px;border-radius:20px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.06)}
     .stat strong{display:block;font-size:1.35rem}
+    .hub-shell{
+      display:grid;
+      grid-template-columns:minmax(0,1.45fr) minmax(280px,.75fr);
+      gap:14px;
+    }
+    .hub-card{
+      border:1px solid var(--line);
+      border-radius:26px;
+      background:linear-gradient(180deg,#171717,#101010);
+      box-shadow:var(--shadow);
+      padding:18px;
+    }
+    .hub-note{
+      display:grid;
+      gap:14px;
+      align-content:start;
+      border-color:rgba(59,130,246,.14);
+      background:
+        radial-gradient(circle at top right, rgba(59,130,246,.08), transparent 24%),
+        linear-gradient(180deg,#151618,#101113);
+    }
+    .hub-title{
+      display:grid;
+      gap:6px;
+    }
+    .hub-pills{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+    }
     .panel{padding:18px}
     .toolbar{justify-content:space-between}
     .project-shell{display:grid;grid-template-columns:minmax(360px,.95fr) minmax(380px,1.05fr);gap:14px}
@@ -339,39 +378,14 @@
     .empty{padding:26px;color:var(--muted)}
     .hidden{display:none !important}
     .timer{font-family:"IBM Plex Mono",monospace;color:#a5f3fc;font-size:1.05rem}
-    .sidebar-footer{
+    .sidebar-user{
       margin-top:auto;
+      width:100%;
+      padding-top:8px;
       display:grid;
-      gap:12px;
-      padding-top:10px;
-    }
-    .sidebar-user-footer-row{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      min-height:68px;
-      padding:10px;
-      border-radius:22px;
-      border:1px solid rgba(255,255,255,.08);
-      background:linear-gradient(180deg,rgba(27,27,29,.98),rgba(13,13,13,.98));
-      box-shadow:0 18px 34px rgba(0,0,0,.16);
-    }
-    .sidebar-admin-actions{
-      display:flex;
+      justify-items:center;
       gap:10px;
     }
-    .sidebar-admin-actions button{flex:1}
-    .sidebar-user-chip{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      width:100%;
-      padding:0;
-      background:transparent;
-      color:var(--text);
-      text-align:left;
-    }
-    .sidebar-user-chip:hover{transform:none;filter:none}
     .sidebar-avatar{
       width:46px;height:46px;flex:0 0 46px;
       border-radius:50%;
@@ -381,34 +395,59 @@
       color:#fff;
       box-shadow:0 12px 24px rgba(239,68,68,.22);
     }
-    .sidebar-user-text{display:grid;gap:2px;min-width:0;flex:1}
-    .sidebar-user-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .sidebar-user-role{font-size:.76rem;color:#8f99aa}
-    .sidebar-user-more{
-      width:42px;height:42px;flex:0 0 42px;
-      border-radius:14px;
-      background:rgba(255,255,255,.035);
-      border:1px solid rgba(255,255,255,.06);
-      display:grid;place-items:center;
-      color:#d9e5f4;
+    .sidebar-user-name{
+      font-weight:700;
+      font-size:.78rem;
+      color:#eff3fb;
+      text-align:center;
+      max-width:78px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
     }
-    .sidebar-user-more:hover{background:rgba(255,255,255,.08)}
-    .sidebar-user-more svg{
-      width:16px;height:16px;
-      fill:none;stroke:currentColor;stroke-width:2;
-      stroke-linecap:round;stroke-linejoin:round;
+    .sidebar-user-role{
+      font-size:.67rem;
+      color:#8f99aa;
+      text-align:center;
+      line-height:1.3;
+      max-width:78px;
     }
-    .sidebar-footer-note{font-size:.76rem;color:#727a89;margin-top:8px}
     @media (max-width:1220px){
       body{overflow:auto}
       .app{grid-template-columns:1fr;height:auto}
       .sidebar,.main{height:auto}
+      .sidebar{
+        position:relative;
+        padding:14px;
+        border-right:0;
+        border-bottom:1px solid rgba(255,255,255,.08);
+      }
+      .sidebar::after{display:none}
+      .sidebar-stack{
+        min-height:auto;
+        flex-direction:row;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+      }
+      .sidebar-nav,.sidebar-quick,.sidebar-user{
+        display:flex;
+        flex-direction:row;
+        align-items:center;
+        width:auto;
+      }
+      .brand-card{width:auto;padding:0}
+      .sidebar-link,.rail-action{width:64px;min-height:64px;border-radius:20px}
+      .hub-shell,.project-shell{grid-template-columns:1fr}
+      .sidebar-user-name,.sidebar-user-role{display:none}
+      .sidebar-user{margin-top:0;padding-top:0}
       .project-shell{grid-template-columns:1fr}
     }
     @media (max-width:760px){
       .hero,.toolbar{grid-template-columns:1fr}
       .row-2{grid-template-columns:1fr}
       .hero-stats{display:grid;grid-template-columns:1fr 1fr}
+      .project-list{grid-template-columns:1fr}
     }
   </style>
 </head>
@@ -439,10 +478,6 @@
         <div class="brand-card">
           <div class="brand-lockup">
             <div class="brand-mark">PWA</div>
-            <div class="brand-copy">
-              <strong>Projetos</strong>
-              <span>Crie vários apps e entre em cada um em um workspace próprio.</span>
-            </div>
           </div>
         </div>
 
@@ -485,76 +520,19 @@
           </button>
         </nav>
 
-        <div id="sidebarProjectsPage" class="sidebar-page">
-          <div class="sidebar-mini-card sidebar-top">
-            <strong style="display:block;margin-bottom:6px">Criar novo projeto</strong>
-            <p class="hint" style="margin:0">Abra um novo workspace e separe cada app do seu jeito.</p>
-            <div class="sidebar-actions">
-              <button id="btnNewProject" class="primary" style="flex:1">Novo projeto</button>
-              <button id="btnRefreshProjects" class="ghost">Atualizar</button>
-            </div>
-          </div>
-
-          <div>
-            <div class="sidebar-section-head">
-              <strong>Projetos salvos</strong>
-              <span>Abra no hover</span>
-            </div>
-            <div id="projectList" class="project-list"></div>
-          </div>
-
-          <div class="sidebar-mini-card">
-            <strong style="display:block;margin-bottom:8px">Biblioteca persistente</strong>
-            <p class="hint" style="margin:0">Cada projeto guarda seus builds com re-download de APK, AAB, log e projeto Xcode.</p>
-            <div class="sidebar-footer-note">Passe o mouse nos cards para abrir mais r&aacute;pido.</div>
-          </div>
+        <div class="sidebar-quick">
+          <button id="btnNewProject" class="rail-action primary" type="button">
+            <span class="plus"><strong>+</strong><span>Novo</span></span>
+          </button>
+          <button id="btnLogoutSide" class="rail-action" type="button">
+            <span class="plus"><strong>↗</strong><span>Sair</span></span>
+          </button>
         </div>
 
-        <div id="sidebarBuildsPage" class="sidebar-page hidden">
-          <div class="sidebar-mini-card">
-            <strong style="display:block;margin-bottom:6px">Biblioteca de builds</strong>
-            <p class="hint" style="margin:0">Veja os pacotes gerados do projeto selecionado e baixe novamente quando quiser.</p>
-          </div>
-          <div class="sidebar-mini-card">
-            <strong style="display:block;margin-bottom:8px">Atalhos</strong>
-            <div class="sidebar-admin-actions">
-              <button id="btnBackToProjectsFromBuilds" class="ghost">Projetos</button>
-              <button id="btnRefreshBuildsSide" class="ghost">Atualizar builds</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="sidebarAdminPage" class="sidebar-page hidden">
-          <div class="sidebar-user-footer-row">
-            <div class="sidebar-avatar" id="railUserBadge">A</div>
-            <div class="sidebar-user-text">
-              <span class="sidebar-user-name" id="sidebarUserName">Conta ativa</span>
-              <span class="sidebar-user-role" id="sidebarUserRole">PWA Builder Pro</span>
-            </div>
-          </div>
-          <div class="sidebar-mini-card">
-            <strong style="display:block;margin-bottom:8px">Administração</strong>
-            <p class="hint" style="margin:0 0 12px">Gerencie usuários, troque sua senha e acompanhe o banco de dados.</p>
-            <div class="sidebar-admin-actions">
-              <button id="btnOpenProjects" class="ghost" style="flex:1">Projetos</button>
-              <button id="btnOpenAdmin" class="blue" style="flex:1">Admin</button>
-            </div>
-          </div>
-          <div class="sidebar-mini-card">
-            <strong style="display:block;margin-bottom:8px">Sessão</strong>
-            <p class="hint" style="margin:0 0 12px">Saia do painel com segurança quando terminar.</p>
-            <button id="btnLogoutSide" class="secondary" style="width:100%">Sair do painel</button>
-          </div>
-        </div>
-
-        <div class="sidebar-footer">
-          <div class="sidebar-user-footer-row">
-            <div class="sidebar-avatar" id="railUserBadgeFooter">A</div>
-            <div class="sidebar-user-text">
-              <span class="sidebar-user-name" id="sidebarUserNameFooter">Conta ativa</span>
-              <span class="sidebar-user-role" id="sidebarUserRoleFooter">PWA Builder Pro</span>
-            </div>
-          </div>
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="railUserBadge">A</div>
+          <span class="sidebar-user-name" id="sidebarUserName">Conta ativa</span>
+          <span class="sidebar-user-role" id="sidebarUserRole">PWA Builder Pro</span>
         </div>
       </div>
     </aside>
@@ -588,6 +566,36 @@
             <span class="chip" id="currentBuildBadge">Nenhum build rodando</span>
             <span id="timer" class="timer">00:00</span>
           </div>
+        </div>
+      </section>
+
+      <section id="workspaceHub" class="hub-shell">
+        <div class="hub-card">
+          <div class="toolbar" style="margin-bottom:14px">
+            <div class="hub-title">
+              <strong>Workspace dos projetos</strong>
+              <span class="hint">Tudo que antes lotava a lateral agora fica aqui, mais limpo e mais fácil de usar.</span>
+            </div>
+            <div class="artifact-buttons">
+              <button id="btnRefreshProjects" class="ghost">Atualizar projetos</button>
+              <button id="btnBackToProjectsFromBuilds" class="ghost hidden">Voltar para projetos</button>
+              <button id="btnRefreshBuildsSide" class="blue hidden">Atualizar builds</button>
+            </div>
+          </div>
+          <div id="projectList" class="project-list"></div>
+        </div>
+
+        <div class="hub-card hub-note">
+          <div class="hub-title">
+            <strong id="hubTitle">Painel focado</strong>
+            <span id="hubText" class="hint">Selecione um projeto para editar identidade, gerar pacotes e acompanhar o histórico num fluxo só.</span>
+          </div>
+          <div class="hub-pills">
+            <span class="chip">Rail lateral compacta</span>
+            <span class="chip">Projetos no conteúdo principal</span>
+            <span class="chip" id="hubModeChip">Modo projetos</span>
+          </div>
+          <div class="hint" id="hubMeta">Crie um projeto novo ou abra um dos cards para começar.</div>
         </div>
       </section>
 
@@ -884,24 +892,21 @@
       const username = ((currentUser && currentUser.username) || 'Conta ativa').trim();
       const initial = (username || 'A').slice(0,1).toUpperCase();
       $('railUserBadge').textContent = initial;
-      $('railUserBadgeFooter').textContent = initial;
       $('sidebarUserName').textContent = username;
-      $('sidebarUserNameFooter').textContent = username;
       $('sidebarUserRole').textContent = currentMode === 'admin' ? 'Administrador no painel' : 'PWA Builder Pro';
-      $('sidebarUserRoleFooter').textContent = currentMode === 'admin' ? 'Administrador no painel' : 'PWA Builder Pro';
     }
     function setMode(mode) {
       currentMode = mode === 'admin' ? 'admin' : mode === 'builds' ? 'builds' : 'projects';
       localStorage.setItem('pwa_mode', currentMode);
       const showProjectWorkspace = (currentMode === 'projects' || currentMode === 'builds') && !!getSelectedProject();
+      const showWorkspaceHub = currentMode === 'projects' || currentMode === 'builds';
       $('adminWorkspace').classList.toggle('hidden', currentMode !== 'admin');
       $('projectWorkspace').classList.toggle('hidden', !showProjectWorkspace);
+      $('workspaceHub').classList.toggle('hidden', !showWorkspaceHub);
       $('emptyProject').classList.toggle('hidden', !(currentMode === 'projects' || currentMode === 'builds') || !!getSelectedProject());
-      $('sidebarProjectsPage').classList.toggle('hidden', currentMode !== 'projects');
-      $('sidebarBuildsPage').classList.toggle('hidden', currentMode !== 'builds');
-      $('sidebarAdminPage').classList.toggle('hidden', currentMode !== 'admin');
-      $('btnOpenProjects').className = currentMode === 'projects' ? 'blue' : 'ghost';
-      $('btnOpenAdmin').className = currentMode === 'admin' ? 'blue' : 'ghost';
+      $('btnRefreshProjects').classList.toggle('hidden', currentMode !== 'projects');
+      $('btnBackToProjectsFromBuilds').classList.toggle('hidden', currentMode !== 'builds');
+      $('btnRefreshBuildsSide').classList.toggle('hidden', currentMode !== 'builds');
       $('railProjects').classList.toggle('active', currentMode === 'projects');
       $('railAdmin').classList.toggle('active', currentMode === 'admin');
       $('railBuilds').classList.toggle('active', currentMode === 'builds');
@@ -1032,6 +1037,15 @@
       $('statStatus').textContent = statusLabel(project?.lastBuildStatus || '');
       $('emptyProject').classList.toggle('hidden', !((currentMode === 'projects' || currentMode === 'builds') && !project));
       $('projectWorkspace').classList.toggle('hidden', !((currentMode === 'projects' || currentMode === 'builds') && !!project));
+      $('workspaceHub').classList.toggle('hidden', !(currentMode === 'projects' || currentMode === 'builds'));
+      $('hubModeChip').textContent = currentMode === 'builds' ? 'Modo builds' : 'Modo projetos';
+      $('hubTitle').textContent = currentMode === 'builds' ? 'Biblioteca do projeto' : 'Workspace dos projetos';
+      $('hubText').textContent = currentMode === 'builds'
+        ? (project ? `Artefatos de ${project.name} centralizados no conteúdo principal.` : 'Escolha um projeto para revisar os builds e baixar os pacotes novamente.')
+        : (project ? `Projeto ${project.name} pronto para edição, geração e acompanhamento.` : 'Crie um projeto novo ou abra um dos cards para começar.');
+      $('hubMeta').textContent = project
+        ? `${project.host || 'Host ainda não definido'} • ${project.buildCount || 0} builds salvos`
+        : 'A lateral agora serve só para navegar. Os projetos ficam organizados aqui no centro.';
     }
     function renderUsers(items) {
       const box = $('userList');
@@ -1209,8 +1223,6 @@
     $('btnRefreshBuilds').onclick = () => loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`));
     $('btnRefreshBuildsSide').onclick = () => loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`));
     $('btnBackToProjectsFromBuilds').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
-    $('btnOpenProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
-    $('btnOpenAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
     $('railProjects').onclick = () => { setMode('projects'); updateHero(getSelectedProject()); };
     $('railAdmin').onclick = () => { setMode('admin'); updateHero(getSelectedProject()); loadUsers().catch(error => appendLog(`⚠️ ${error.message}`)); };
     $('railBuilds').onclick = () => { setMode('builds'); updateHero(getSelectedProject()); loadBuilds().catch(error => appendLog(`⚠️ ${error.message}`)); };
