@@ -454,9 +454,18 @@ async function readProjectsStore() {
 
 async function listProjectsWithSummary() {
   const builds = listStoredBuilds();
-  return (await readProjectsStore())
-    .map(project => projectSummaryFromBuilds(project, builds))
-    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  const projects = await readProjectsStore();
+  const enriched = await Promise.all(projects.map(async project => {
+    const signing = await loadStoredSigningRecord(project.id).catch(() => null);
+    return {
+      ...projectSummaryFromBuilds(project, builds),
+      signingSha1: signing ? String(signing.sha1 || '') : '',
+      signingSha256: signing ? String(signing.sha256 || '') : '',
+      signingAlias: signing ? String(signing.alias || '') : '',
+      signingSource: signing ? String(signing.source || '') : ''
+    };
+  }));
+  return enriched.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
 
 async function getProject(projectId) {
@@ -613,6 +622,28 @@ function inspectKeystore({ keystorePath, storePassword, keyAlias }) {
   const output = `${result.stdout || ''}\n${result.stderr || ''}`;
   if (result.status !== 0) {
     const msg = output.trim() || 'Falha ao validar keystore.';
+    throw new Error(msg);
+  }
+  const matchSha1 = output.match(/SHA1:\s*([A-F0-9:]{40,})/i);
+  const matchSha256 = output.match(/SHA256:\s*([A-F0-9:]{64,})/i);
+  return {
+    sha1: matchSha1 ? String(matchSha1[1]).toUpperCase() : '',
+    sha256: matchSha256 ? String(matchSha256[1]).toUpperCase() : '',
+    output
+  };
+}
+
+function inspectSignedArchive(archivePath) {
+  const javaHome = getJavaHome();
+  const env = javaHome ? { ...process.env, JAVA_HOME: javaHome, PATH: `${process.env.PATH}:${javaHome}/bin` } : process.env;
+  const result = spawnSync('keytool', ['-printcert', '-jarfile', archivePath], {
+    encoding: 'utf8',
+    env,
+    maxBuffer: 1024 * 1024 * 4
+  });
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  if (result.status !== 0) {
+    const msg = output.trim() || `Falha ao ler assinatura do arquivo ${path.basename(archivePath)}.`;
     throw new Error(msg);
   }
   const matchSha1 = output.match(/SHA1:\s*([A-F0-9:]{40,})/i);
@@ -2168,6 +2199,15 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
   if (!wantsAndroid && !wantsIos) {
     return res.status(400).json({ success: false, msg: 'Selecione pelo menos um destino: Android e/ou iOS/Xcode.' });
   }
+  const currentProjectSigningSha1 = String(currentProject?.config?.signingSha1 || '').trim();
+  const hasUploadedSigningFile = !!req.file;
+  const requiresStoredSigning = wantsAndroid && (androidMode === 'aab' || androidMode === 'both');
+  if (requiresStoredSigning && !hasUploadedSigningFile && !currentProjectSigningSha1) {
+    return res.status(400).json({
+      success: false,
+      msg: 'Para gerar AAB, envie a keystore original deste app ou gere primeiro um build Android com assinatura persistida salva no projeto.'
+    });
+  }
   if (buildInProgress) {
     return res.status(409).json({ success: false, msg: 'Já existe um build em andamento. Aguarde terminar ou clique em Cancelar.' });
   }
@@ -2344,6 +2384,7 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
         BUBBLEWRAP_KEY_PASSWORD: storePassword
       };
       let aabFileForPlay = '';
+      let builtAabSignature = null;
       fs.writeFileSync(path.join(buildDir, 'keystore-info.json'), JSON.stringify({ path: keystorePath, alias: keyAlias, storePassword }, null, 2));
 
       emitLog('> [ANDROID] Inicializando projeto Android/TWA pelo Web Manifest...');
@@ -2442,6 +2483,9 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
         const aabFile = findBuiltFile(buildDir, 'aab');
         if (!aabFile) throw new Error('O build Android terminou sem gerar o arquivo AAB.');
         aabFileForPlay = aabFile;
+        builtAabSignature = inspectSignedArchive(aabFile);
+        if (builtAabSignature.sha1) emitLog(`> [ANDROID] SHA1 do AAB gerado: ${builtAabSignature.sha1}`);
+        if (builtAabSignature.sha256) emitLog(`> [ANDROID] SHA256 do AAB gerado: ${builtAabSignature.sha256}`);
         const aabArtifact = archiveBuildArtifact(buildId, aabFile, `${slugify(safeAppName)}-${buildId}.aab`, {
           key: 'aab',
           label: 'Android App Bundle',
@@ -2488,6 +2532,64 @@ app.post('/generate', requirePanelAuth, upload.single('signingKey'), async (req,
         type: 'txt'
       });
       if (playCopyArtifact) artifacts.push(playCopyArtifact);
+
+      const signingSummaryPath = path.join(buildDir, 'dist', 'android-signing-summary.json');
+      fs.writeFileSync(signingSummaryPath, JSON.stringify({
+        projectId: currentProject.id,
+        appName: safeAppName,
+        packageId: finalPackageId,
+        keystore: {
+          alias: keyAlias,
+          sha1: signing.sha1 || '',
+          sha256: signing.sha256 || '',
+          source: signing.reused ? 'reused' : (req.file ? 'uploaded' : 'generated')
+        },
+        aab: builtAabSignature ? {
+          sha1: builtAabSignature.sha1 || '',
+          sha256: builtAabSignature.sha256 || ''
+        } : null,
+        generatedAt: new Date().toISOString()
+      }, null, 2));
+      const signingSummaryArtifact = archiveBuildArtifact(buildId, signingSummaryPath, `${slugify(safeAppName)}-${buildId}-android-signing-summary.json`, {
+        key: 'signing-summary',
+        label: 'Resumo da assinatura Android',
+        platform: 'android',
+        type: 'json'
+      });
+      if (signingSummaryArtifact) artifacts.push(signingSummaryArtifact);
+
+      currentProject = await saveProjectRecord({
+        ...currentProject,
+        config: {
+          ...(currentProject.config || {}),
+          appName: safeAppName,
+          host: siteUrl,
+          versionCode: vCode,
+          versionName: vName,
+          shortName: finalShortName,
+          packageId: finalPackageId,
+          themeColor: themeColor || '#000000',
+          backgroundColor: backgroundColor || '#ffffff',
+          navColor: navColor || '#000000',
+          navDarkColor: navDarkColor || '#000000',
+          iconUrl: iconUrl || (cleanWebManifest.icons && cleanWebManifest.icons[0] ? cleanWebManifest.icons[0].src : ''),
+          startUrl: startUrl || '/',
+          description: description || '',
+          iarc: iarc || '',
+          displayMode: displayMode || 'standalone',
+          orientation: orientation || 'portrait',
+          screenshots: normalizedScreenshots,
+          buildAndroid: wantsAndroid,
+          buildIos: wantsIos,
+          androidArtifact: androidMode,
+          signingAlias: String(signingAlias || currentProject?.config?.signingAlias || keyAlias || '').trim(),
+          signingPassword: String(signingPassword || currentProject?.config?.signingPassword || ''),
+          signingSha1: String(signing.sha1 || ''),
+          signingSha256: String(signing.sha256 || ''),
+          lastAabSha1: String(builtAabSignature?.sha1 || ''),
+          lastAabSha256: String(builtAabSignature?.sha256 || '')
+        }
+      });
 
       const assetlinksPack = createAssetLinksArtifacts({
         buildDir,

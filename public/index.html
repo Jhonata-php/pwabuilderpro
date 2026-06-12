@@ -754,6 +754,8 @@
               <label for="signingKey" style="margin-top:12px">Arquivo da keystore (.jks, .keystore, .p12, .pfx)</label>
               <input id="signingKey" name="signingKey" type="file" accept=".jks,.keystore,.p12,.pfx,application/x-pkcs12">
               <div class="hint" id="signingHint" style="margin-top:10px">Sem arquivo enviado: o projeto usa a keystore já salva ou gera uma automática se ainda não houver uma.</div>
+              <div class="hint" id="signingFingerprintInfo" style="margin-top:10px"></div>
+              <div class="hint" id="signingGuardInfo" style="margin-top:10px"></div>
             </div>
 
             <div class="section">
@@ -1000,6 +1002,23 @@
       $('androidTargetCard').classList.toggle('active', $('buildAndroid').checked);
       $('iosTargetCard').classList.toggle('active', $('buildIos').checked);
       $('androidArtifact').disabled = !$('buildAndroid').checked;
+      updateSigningGuard();
+    }
+    function updateSigningGuard() {
+      const project = getSelectedProject();
+      const cfg = (project && project.config) || {};
+      const hasSavedSha1 = !!String(project?.signingSha1 || cfg.signingSha1 || '').trim();
+      const hasUploadedFile = !!($('signingKey').files && $('signingKey').files[0]);
+      const wantsAndroid = $('buildAndroid').checked;
+      const androidMode = $('androidArtifact').value;
+      const requiresStoredSigning = wantsAndroid && (androidMode === 'aab' || androidMode === 'both');
+      const blocked = requiresStoredSigning && !hasSavedSha1 && !hasUploadedFile;
+      $('signingGuardInfo').innerHTML = blocked
+        ? 'AAB bloqueado até existir uma assinatura persistida neste projeto. Envie a keystore original agora ou grave a assinatura correta no projeto.'
+        : (requiresStoredSigning
+          ? `AAB liberado. SHA1 persistido no projeto: <strong>${escapeHtml(String(project?.signingSha1 || cfg.signingSha1 || 'presente'))}</strong>${!hasSavedSha1 && hasUploadedFile ? '<br>Keystore enviada neste build. O SHA1 será salvo ao concluir.' : ''}`
+          : 'APK pode ser gerado normalmente. Para AAB, o projeto precisa de assinatura persistida ou uma keystore enviada neste build.');
+      $('btnBuild').disabled = blocked || buildRunning;
     }
     function setFormFromConfig(project) {
       const cfg = (project && project.config) || {};
@@ -1029,6 +1048,12 @@
       $('signingHint').textContent = cfg.signingAlias
         ? 'Keystore manual configurada neste projeto. Envie um novo arquivo apenas se quiser substituir a chave.'
         : 'Sem arquivo enviado: o projeto usa a keystore já salva ou gera uma automática se ainda não houver uma.';
+      const signingSha1 = project?.signingSha1 || cfg.signingSha1 || '';
+      const signingSha256 = project?.signingSha256 || cfg.signingSha256 || '';
+      const aabSha1 = cfg.lastAabSha1 || '';
+      $('signingFingerprintInfo').innerHTML = signingSha1
+        ? `SHA1 salvo da keystore: <strong>${escapeHtml(signingSha1)}</strong>${signingSha256 ? `<br>SHA256 salvo da keystore: <strong>${escapeHtml(signingSha256)}</strong>` : ''}${aabSha1 ? `<br>SHA1 do último AAB gerado: <strong>${escapeHtml(aabSha1)}</strong>` : ''}`
+        : 'Nenhum fingerprint salvo ainda. Gere um build Android ou envie a keystore original para gravar o SHA1 do projeto.';
       $('screenshotsContainer').innerHTML = '';
       const shots = Array.isArray(cfg.screenshots) && cfg.screenshots.length ? cfg.screenshots : [''];
       shots.forEach(addScreenshot);
@@ -1045,7 +1070,7 @@
           ? (project ? `Artefatos e histórico de ${project.name}.` : 'Selecione um projeto para ver os builds salvos.')
         : (project ? (project.host || 'Configure a PWA e gere os artefatos desse projeto.') : 'Crie um projeto na sidebar para começar.');
       $('projectNameBar').textContent = project ? project.name : 'Nenhum projeto selecionado';
-      $('projectMetaBar').textContent = project ? `${project.packageId || 'Sem packageId'} • ${project.buildCount || 0} builds` : 'Quando você entrar em um projeto, tudo aqui fica separado para ele.';
+      $('projectMetaBar').textContent = project ? `${project.packageId || 'Sem packageId'} • ${project.buildCount || 0} builds${project.signingSha1 ? ` • SHA1 ${project.signingSha1}` : ''}` : 'Quando você entrar em um projeto, tudo aqui fica separado para ele.';
       $('statBuilds').textContent = String(projectBuilds.length);
       $('statStatus').textContent = statusLabel(project?.lastBuildStatus || '');
       $('emptyProject').classList.toggle('hidden', !((currentMode === 'projects' || currentMode === 'builds') && !project));
@@ -1098,7 +1123,9 @@
         return;
       }
       const projectBuilds = builds.filter(item => item.projectId === project.id);
-      $('manifestSummary').innerHTML = project.host ? `<span class="chip">${escapeHtml(project.host)}</span>` : 'Configure o projeto e faça o primeiro build.';
+      $('manifestSummary').innerHTML = project.host
+        ? `<span class="chip">${escapeHtml(project.host)}</span>${project.signingSha1 ? ` <span class="chip">SHA1 ${escapeHtml(project.signingSha1)}</span>` : ''}`
+        : 'Configure o projeto e faça o primeiro build.';
       if (!projectBuilds.length) {
         box.innerHTML = '<div class="empty">Nenhum build deste projeto ainda.</div>';
         return;
@@ -1221,6 +1248,7 @@
     $('btnAddScreenshot').onclick = () => addScreenshot();
     $('buildAndroid').addEventListener('change', updateTargetCards);
     $('buildIos').addEventListener('change', updateTargetCards);
+    $('androidArtifact').addEventListener('change', updateSigningGuard);
     $('signingKey').addEventListener('change', () => {
       const file = $('signingKey').files && $('signingKey').files[0];
       $('signingHint').textContent = file
@@ -1228,6 +1256,7 @@
         : ($('signingAlias').value.trim()
           ? 'Keystore manual configurada neste projeto. Envie um novo arquivo apenas se quiser substituir a chave.'
           : 'Sem arquivo enviado: o projeto usa a keystore já salva ou gera uma automática se ainda não houver uma.');
+      updateSigningGuard();
     });
     $('btnLogout').onclick = () => clearSession('');
     $('btnLogoutSide').onclick = () => clearSession('');
@@ -1342,6 +1371,12 @@
       const project = getSelectedProject();
       if (!project) return alert('Selecione um projeto primeiro.');
       if (!$('buildAndroid').checked && !$('buildIos').checked) return alert('Selecione Android e/ou iOS.');
+      const hasSavedSha1 = !!String(project?.signingSha1 || project?.config?.signingSha1 || '').trim();
+      const hasUploadedFile = !!($('signingKey').files && $('signingKey').files[0]);
+      const wantsAab = $('buildAndroid').checked && ['aab', 'both'].includes($('androidArtifact').value);
+      if (wantsAab && !hasSavedSha1 && !hasUploadedFile) {
+        return alert('Para gerar AAB, envie a keystore original agora ou use um projeto que já tenha SHA1 persistido.');
+      }
       setBuildState(true);
       startTime = Date.now();
       clearInterval(timerInt);
